@@ -1,1 +1,2 @@
 GitLab Zero to Production 
+Git is the foundation of GitLab 
