@@ -1,1080 +1,629 @@
-Lesson 9 — GitLab Protected Branches \& Repository Security
+# Lesson 9 — GitLab Protected Branches & Repository Security
 
+## 🎯 Objective
 
+The objective of this lesson was to understand **protected branches** — a key GitLab security feature — and how they work together with GitLab roles and the Merge Request workflow to prevent unauthorized or accidental changes to important branches.
 
-\## 1. Introduction
+---
 
+## 📚 Table of Contents
 
+**Concepts**
 
-Protected branches are an important GitLab security feature used to protect important branches such as:
+1. [Introduction](#1-introduction)
+2. [Protected Branch — Layman Explanation](#2-protected-branch--layman-explanation)
+3. [Why Protect `main`?](#3-why-protect-main)
+4. [Normal Branch vs Protected Branch](#4-normal-branch-vs-protected-branch)
+5. [Production Example](#5-production-example)
+6. [GitLab Protected Branch Configuration](#6-gitlab-protected-branch-configuration)
+7. [Our `main` Branch Configuration](#7-our-main-branch-configuration)
+8. [Meaning of Each Setting](#8-meaning-of-each-setting)
+9. [Lesson 8 Connection — Roles and Protected Branches](#9-lesson-8-connection--roles-and-protected-branches)
 
+**Hands-On**
 
+10. [Step 1 — Check the Repository](#10-step-1--check-the-repository)
+11. [Step 2 — Create a Test Branch](#11-step-2--create-a-test-branch)
+12. [Step 3 — Create a Test File](#12-step-3--create-a-test-file)
+13. [Step 4 — Stage and Commit the File](#13-step-4--stage-and-commit-the-file)
+14. [Step 5 — Push the Test Branch](#14-step-5--push-the-test-branch)
+15. [Step 6 — Direct Push Test](#15-step-6--direct-push-test)
+16. [Git Protection vs GitLab Protection](#16-git-protection-vs-gitlab-protection)
+17. [How to Properly Test GitLab Branch Protection](#17-how-to-properly-test-gitlab-branch-protection)
+18. [Clean Up the Test Branch](#18-clean-up-the-test-branch)
 
-\- `main`
+**Production & Security**
 
-\- `master`
+19. [Safe Production Workflow](#19-safe-production-workflow)
+20. [Why This Matters in DevOps](#20-why-this-matters-in-devops)
+21. [Security Principles Learned](#21-security-principles-learned)
 
-\- `develop`
+**Summary**
 
-\- release branches
+22. [Important Commands](#22-important-commands)
+23. [Key Takeaways](#23-key-takeaways)
+24. [Lesson 9 Completion](#24-lesson-9-completion)
 
-\- production branches
+---
 
+## 1. Introduction
 
+**Protected branches** are an important GitLab security feature used to protect important branches such as:
 
-The main purpose of a protected branch is to prevent unauthorized or accidental changes.
+- `main`
+- `master`
+- `develop`
+- Release branches
+- Production branches
 
+> 🎯 The main purpose of a protected branch is to **prevent unauthorized or accidental changes**.
 
+In a production environment, developers normally work on **feature branches** and use **Merge Requests** to move their changes into protected branches.
 
-In a production environment, developers normally work on feature branches and use Merge Requests to move their changes into protected branches.
+---
 
+## 2. Protected Branch — Layman Explanation
 
-
-\---
-
-
-
-\# 2. Protected Branch — Layman Explanation
-
-
-
-Think of a GitLab repository like a company.
-
-
+Think of a GitLab repository like a company:
 
 ```text
-
 Company
-
 │
-
 ├── Developer Area
-
 │     └── Feature Branches
-
 │
-
 └── Production Area 🔒
+      └── main
+```
 
-&#x20;     └── main
-
-
-
-Developers can work freely in their own area.
-
-
-
-But the production area is protected.
-
-
-
-They cannot simply walk in and change production directly.
-
-
+Developers can work freely in their own area. But the production area is **protected** — they can't simply walk in and change production directly.
 
 Instead:
 
-
-
+```text
 Developer
-
-&#x20;   ↓
-
+    ↓
 Feature Branch
-
-&#x20;   ↓
-
+    ↓
 Commit
-
-&#x20;   ↓
-
+    ↓
 Push
-
-&#x20;   ↓
-
+    ↓
 Merge Request
-
-&#x20;   ↓
-
+    ↓
 Review
-
-&#x20;   ↓
-
+    ↓
 Approval / CI checks
-
-&#x20;   ↓
-
+    ↓
 main 🔒
-
-
+```
 
 This is the basic idea behind protected branches.
 
+---
 
+## 3. Why Protect `main`?
 
-3\. Why Protect main?
+The `main` branch commonly represents the **stable version** of the project.
 
+Without protection, someone could accidentally run:
 
-
-The main branch commonly represents the stable version of the project.
-
-
-
-Without protection, someone could accidentally execute:
-
-
-
+```bash
 git push origin main
-
-
+```
 
 and directly change the branch.
 
+In a production workflow, changes should go through a **controlled process**:
 
-
-In a production workflow, we generally want changes to go through a controlled process.
-
-
-
+```text
 Feature Branch
-
-&#x20;     ↓
-
+      ↓
 Merge Request
-
-&#x20;     ↓
-
+      ↓
 Code Review
-
-&#x20;     ↓
-
+      ↓
 CI/CD Checks
+      ↓
+Protected main 🔒
+```
 
-&#x20;     ↓
+---
 
-Protected main
+## 4. Normal Branch vs Protected Branch
 
+| | Normal Branch | Protected Branch |
+|---|---|---|
+| **Examples** | `feature/login`, `feature/payment`, `feature/user-profile` | `main` 🔒 |
+| **Direct push** | ✅ Allowed for Developers | ❌ Restricted (can be set to *No one*) |
+| **How changes arrive** | Developer pushes directly | Through a Merge Request |
+| **Force push** | Usually allowed | Usually disabled |
 
+Normal branch workflow:
 
-This provides better control over changes.
-
-
-
-4\. Normal Branch vs Protected Branch
-
-Normal Branch
-
-
-
-A normal branch generally allows developers to push their changes.
-
-
-
-Example:
-
-
-
-feature/login
-
-feature/payment
-
-feature/user-profile
-
-
-
-Developer workflow:
-
-
-
+```bash
 git add .
-
 git commit -m "Add login feature"
-
 git push origin feature/login
+```
 
-Protected Branch
+For a protected branch, developers create a **Merge Request** instead of pushing directly.
 
+---
 
+## 5. Production Example
 
-A protected branch has restrictions on who can push or merge.
+Imagine a company has the repository `ecommerce-application`, with `main` as its production branch. A developer wants to add a payment feature.
 
+Instead of changing `main` directly:
 
-
-Example:
-
-
-
-main 🔒
-
-
-
-The branch can be configured so that direct pushes are not allowed.
-
-
-
-Instead, developers create a Merge Request.
-
-
-
-5\. Production Example
-
-
-
-Imagine a company has this repository:
-
-
-
-ecommerce-application
-
-
-
-The production branch is:
-
-
-
-main
-
-
-
-A developer wants to add a payment feature.
-
-
-
-Instead of changing main directly:
-
-
-
+```text
 Developer
-
-&#x20;  │
-
-&#x20;  ▼
-
+   │
+   ▼
 feature/payment
+   │
+   ├── Code
+   ├── Commit
+   └── Push
+         │
+         ▼
+   Merge Request
+         │
+         ▼
+   Code Review
+         │
+         ▼
+       CI/CD
+         │
+         ▼
+     main 🔒
+```
 
-&#x20;  │
+This makes the workflow **controlled and auditable**.
 
-&#x20;  ├── Code
+---
 
-&#x20;  ├── Commit
+## 6. GitLab Protected Branch Configuration
 
-&#x20;  └── Push
+Protected branches are configured from:
 
-&#x20;        │
-
-&#x20;        ▼
-
-&#x20;   Merge Request
-
-&#x20;        │
-
-&#x20;        ▼
-
-&#x20;  Code Review
-
-&#x20;        │
-
-&#x20;        ▼
-
-&#x20;     CI/CD
-
-&#x20;        │
-
-&#x20;        ▼
-
-&#x20;    main 🔒
-
-
-
-This makes the workflow controlled and auditable.
-
-
-
-6\. GitLab Protected Branch Configuration
-
-
-
-In the GitLab project, protected branches can be configured from:
-
-
-
+```text
 Project
-
-&#x20;  ↓
-
+   ↓
 Settings
-
-&#x20;  ↓
-
+   ↓
 Repository
-
-&#x20;  ↓
-
+   ↓
 Protected branches
+```
 
+GitLab also provides **Branch rules**, which bring branch protection, approval rules, and status checks together in one place.
 
+---
 
-GitLab also provides Branch rules, which brings branch protection, approval rules and status checks together.
+## 7. Our `main` Branch Configuration
 
+For this learning project, `main` was configured as a protected branch:
 
+| Setting | Value |
+|---|---|
+| Branch | `main` |
+| Allowed to merge | Maintainers |
+| Allowed to push and merge | No one |
+| Allowed to force push | ❌ OFF |
 
-7\. Our main Branch Configuration
-
-
-
-For this learning project, the main branch was configured as a protected branch.
-
-
-
-The configuration is:
-
-
-
-Setting	Value
-
-Branch	main
-
-Allowed to merge	Maintainers
-
-Allowed to push and merge	No one
-
-Allowed to force push	OFF
-
-
-
-Therefore:
-
-
-
+```text
 main 🔒
 
-
-
-Merge → Maintainers
-
+Merge       → Maintainers
 Direct Push → No one
+Force Push  → Disabled
+```
 
-Force Push → Disabled
+---
 
-8\. Meaning of Each Setting
+## 8. Meaning of Each Setting
 
-Allowed to merge
+### Allowed to merge
 
+Controls **who can merge Merge Requests** into the protected branch.
 
-
-This controls who can merge Merge Requests into the protected branch.
-
-
-
-Our configuration:
-
-
-
+```text
 Allowed to merge → Maintainers
+```
 
+> 💡 Selecting **Maintainers** also includes roles above it — so **Owners** can merge too.
 
+### Allowed to push and merge
 
-Therefore, the merge process is restricted to the configured role.
+Controls **who can push directly** to the protected branch.
 
-
-
-Allowed to push and merge
-
-
-
-This controls who can directly push changes to the protected branch.
-
-
-
-Our configuration:
-
-
-
+```text
 Allowed to push and merge → No one
+```
 
+This is important because it **forces the Merge Request workflow** — nobody, not even the Owner, can bypass review by pushing straight to `main`.
 
-
-This is important because it encourages the Merge Request workflow.
-
-
-
+```text
 Developer
-
-&#x20;   ↓
-
+    ↓
 Feature Branch
-
-&#x20;   ↓
-
+    ↓
 Merge Request
-
-&#x20;   ↓
-
+    ↓
 Maintainer
-
-&#x20;   ↓
-
+    ↓
 main
+```
 
-Allowed to force push
+### Allowed to force push
 
+Force pushing **rewrites branch history**:
 
-
-Force pushing can rewrite branch history.
-
-
-
-For example:
-
-
-
+```bash
 git push --force
+```
 
+On an important branch, this is dangerous because commits can be rewritten or removed.
 
-
-Force pushing to an important branch can be dangerous because commits can be rewritten or removed from the branch history.
-
-
-
-Our configuration:
-
-
-
+```text
 Allowed to force push → OFF
+```
 
-9\. Lesson 8 Connection — Roles and Protected Branches
+---
 
+## 9. Lesson 8 Connection — Roles and Protected Branches
 
+Protected branches are closely related to GitLab roles. In Lesson 8, we learned that roles have different levels of access:
 
-Protected branches are closely related to GitLab roles.
+```text
+Guest → Planner → Reporter → Developer → Maintainer → Owner
+```
 
+A **Developer** can work with feature branches and create Merge Requests. A **protected branch** then restricts who is allowed to merge or push to important branches.
 
-
-In Lesson 8, we learned that different GitLab roles have different levels of access.
-
-
-
-For example:
-
-
-
-Guest
-
-Planner
-
-Reporter
-
-Developer
-
-Maintainer
-
-Owner
-
-
-
-A Developer can normally work with feature branches and create Merge Requests.
-
-
-
-A protected branch can then restrict who is allowed to merge or push to important branches.
-
-
-
-Therefore:
-
-
-
+```text
 GitLab Role
-
-&#x20;    +
-
+     +
 Branch Protection
-
-&#x20;    ↓
-
+     ↓
 Access Control
-
-
+```
 
 This is an important DevOps security concept.
 
+---
 
+# 🛠️ Hands-On
 
-10\. Hands-on Practice
+| Item | Value |
+|---|---|
+| GitLab repository | `gitlab-zero-to-production` |
+| Local repository | `C:\Users\ASPL-PUNE\gitlab-zero-to-production-gitlab` |
 
-Step 1 — Check the repository
+## 10. Step 1 — Check the Repository
 
-
-
-Our GitLab repository:
-
-
-
-gitlab-zero-to-production
-
-
-
-Local repository:
-
-
-
-C:\\Users\\ASPL-PUNE\\gitlab-zero-to-production-gitlab
-
-
-
-Check the repository:
-
-
-
+```bash
 git status
-
-
-
-Check the current branch:
-
-
-
 git branch --show-current
-
-
-
-Check recent commits:
-
-
-
 git log --oneline -3
+```
 
-11\. Create a Test Branch
+---
 
+## 11. Step 2 — Create a Test Branch
 
-
-A temporary branch was created:
-
-
-
+```bash
 git switch -c test/protected-main
-
-
+```
 
 The current branch became:
 
-
-
+```text
 test/protected-main
+```
 
-12\. Create a Test File
+---
 
+## 12. Step 3 — Create a Test File
 
-
-A test file was created:
-
-
-
+```bash
 echo Protected branch test - Lesson 9 > lesson9-protection-test.txt
-
-
-
-Check the working tree:
-
-
-
 git status
+```
 
+The file initially appeared as an **untracked** file.
 
+---
 
-The file initially appeared as an untracked file.
+## 13. Step 4 — Stage and Commit the File
 
-
-
-13\. Stage and Commit the File
-
-
-
-The file was staged:
-
-
-
+```bash
 git add lesson9-protection-test.txt
-
-
-
-Then committed:
-
-
-
 git commit -m "Test protected main branch"
+```
 
+Resulting commit:
 
-
-The resulting commit was:
-
-
-
+```text
 04cfaa7 Test protected main branch
+```
 
-14\. Push the Test Branch
+---
 
+## 14. Step 5 — Push the Test Branch
 
-
-The test branch was pushed to GitLab:
-
-
-
+```bash
 git push -u origin test/protected-main
+```
 
+✅ **This succeeded** — because `test/protected-main` is **not** a protected branch, so a normal push was allowed.
 
+---
 
-This succeeded.
+## 15. Step 6 — Direct Push Test
 
+The following command was used to test a direct push to `main`:
 
-
-Why?
-
-
-
-Because:
-
-
-
-test/protected-main
-
-
-
-was not a protected branch.
-
-
-
-Therefore, the normal branch push was allowed.
-
-
-
-15\. Direct Push Test
-
-
-
-The following command was used to test a direct push toward main:
-
-
-
+```bash
 git push origin HEAD:main
+```
 
+The push was **rejected**:
 
-
-The push was rejected with:
-
-
-
-! \[rejected] HEAD -> main (fetch first)
-
-
+```text
+! [rejected]        HEAD -> main (fetch first)
+```
 
 Git also reported:
 
-
-
+```text
 remote contains work that you do not have locally
+```
 
-Important Learning
+### ⚠️ Important Learning
 
+This rejection was caused by **Git's branch-history (fast-forward) check** — the remote `main` had commits that the local branch didn't have.
 
+It was **not** proof that GitLab's protected-branch rule rejected the push. Git stopped the push before GitLab's permission check was even reached.
 
-This particular rejection was caused by Git's branch-history/fast-forward protection.
+---
 
+## 16. Git Protection vs GitLab Protection
 
+There are **two separate mechanisms**:
 
-It was not proof by itself that GitLab's protected-branch rule rejected the push.
+| | Git (history check) | GitLab (permission check) |
+|---|---|---|
+| **What it checks** | Does the remote have commits you don't have locally? | Is the branch protected, and is this user allowed to push? |
+| **Where it happens** | Git itself (fast-forward rule) | GitLab server (protected branch rule) |
+| **Typical error** | `! [rejected] HEAD -> main (fetch first)` | `! [remote rejected] HEAD -> main (pre-receive hook declined)` |
+| **Fix** | `git fetch` / `git pull` first | Use a Merge Request |
 
+GitLab's check, conceptually:
 
-
-This distinction is important.
-
-
-
-There are two different mechanisms:
-
-
-
-Git
-
-&#x20;↓
-
-Checks branch history
-
-&#x20;↓
-
-Fast-forward / history rules
-
-
-
-and:
-
-
-
-GitLab
-
-&#x20;↓
-
-Checks branch permissions
-
-&#x20;↓
-
-Protected branch rules
-
-
-
-Therefore, a fetch first rejection should not automatically be interpreted as a protected-branch rejection.
-
-
-
-16\. Git Protection vs GitLab Protection
-
-Git-level protection
-
-
-
-Git may reject a push when the remote branch contains commits that the local branch does not have.
-
-
-
-Example:
-
-
-
-! \[rejected] HEAD -> main (fetch first)
-
-
-
-This is related to branch history.
-
-
-
-GitLab protected branch
-
-
-
-GitLab can reject a push because the target branch is protected and the user is not allowed to push to it.
-
-
-
-Conceptually:
-
-
-
+```text
 Local Git
-
-&#x20;  ↓
-
+   ↓
 Push
-
-&#x20;  ↓
-
+   ↓
 GitLab
-
-&#x20;  ↓
-
-Is branch protected?
-
-&#x20;  ↓
-
-Is user allowed to push?
-
-&#x20;  ↓
-
-NO
-
-&#x20;  ↓
-
+   ↓
+Is branch protected?  → YES
+   ↓
+Is user allowed to push?  → NO
+   ↓
 Reject
+```
 
+> 💡 A `fetch first` rejection should **not** be interpreted as a protected-branch rejection.
 
+---
 
-These are separate checks.
+## 17. How to Properly Test GitLab Branch Protection
 
+To see GitLab's protection actually block the push, first remove the Git history problem by building the test commit **on top of the latest `main`**:
 
+```bash
+git fetch origin
+git rebase origin/main
+git push origin HEAD:main
+```
 
-17\. Safe Production Workflow
+Now Git's fast-forward check passes, so the push reaches GitLab's permission check. Because *Allowed to push and merge* is set to **No one**, the expected result is:
 
+```text
+remote: GitLab: You are not allowed to push code to protected branches on this project.
+ ! [remote rejected] HEAD -> main (pre-receive hook declined)
+```
 
+| Keyword in the error | Who rejected the push |
+|---|---|
+| `fetch first` / `non-fast-forward` | **Git** (history) |
+| `remote rejected` / `pre-receive hook declined` / `protected branches` | **GitLab** (permissions) ✅ |
 
-A recommended protected-branch workflow can look like:
+---
 
+## 18. Clean Up the Test Branch
 
+After testing, remove the temporary branch:
 
-&#x20;                 GitLab Repository
+```bash
+git switch main
+git branch -D test/protected-main
+git push origin --delete test/protected-main
+git fetch --prune
+```
 
-&#x20;                        │
+> ℹ️ `-D` (force delete) is needed because the test commit was never merged into `main`.
 
-&#x20;                        ▼
+---
 
-&#x20;                   main 🔒
+# 🔐 Production & Security
 
-&#x20;                        ▲
+## 19. Safe Production Workflow
 
-&#x20;                        │
-
-&#x20;                  Merge Request
-
-&#x20;                        ▲
-
-&#x20;                        │
-
-&#x20;                 feature branch
-
-&#x20;                        ▲
-
-&#x20;                        │
-
-&#x20;                    Developer
-
-
+```text
+                  GitLab Repository
+                         │
+                         ▼
+                     main 🔒
+                         ▲
+                         │
+                   Merge Request
+                         ▲
+                         │
+                  feature branch
+                         ▲
+                         │
+                     Developer
+```
 
 Detailed workflow:
 
+```text
+1. Create feature branch
+        ↓
+2. Develop code
+        ↓
+3. Commit changes
+        ↓
+4. Push feature branch
+        ↓
+5. Create Merge Request
+        ↓
+6. Review changes
+        ↓
+7. Run CI/CD checks
+        ↓
+8. Maintainer merges
+        ↓
+9. main 🔒
+```
 
+---
 
-1\. Create feature branch
+## 20. Why This Matters in DevOps
 
-&#x20;       ↓
+Protected branches become especially important when GitLab is connected with CI/CD:
 
-2\. Develop code
-
-&#x20;       ↓
-
-3\. Commit changes
-
-&#x20;       ↓
-
-4\. Push feature branch
-
-&#x20;       ↓
-
-5\. Create Merge Request
-
-&#x20;       ↓
-
-6\. Review changes
-
-&#x20;       ↓
-
-7\. Run CI/CD checks
-
-&#x20;       ↓
-
-8\. Maintainer merges
-
-&#x20;       ↓
-
-9\. main 🔒
-
-18\. Why This Matters in DevOps
-
-
-
-Protected branches become especially important when GitLab is connected with CI/CD.
-
-
-
-For example:
-
-
-
+```text
 Developer
-
-&#x20;   ↓
-
+    ↓
 GitLab Feature Branch
-
-&#x20;   ↓
-
+    ↓
 Merge Request
-
-&#x20;   ↓
-
+    ↓
 Jenkins / GitLab CI
-
-&#x20;   ↓
-
+    ↓
 Unit Tests
-
-&#x20;   ↓
-
+    ↓
 SonarQube
-
-&#x20;   ↓
-
+    ↓
 Security Checks
-
-&#x20;   ↓
-
+    ↓
 Approval
-
-&#x20;   ↓
-
+    ↓
 Protected main
-
-&#x20;   ↓
-
+    ↓
 Build Artifact
-
-&#x20;   ↓
-
+    ↓
 JFrog Artifactory
-
-&#x20;   ↓
-
+    ↓
 Deployment
+```
 
+This prevents an uncontrolled change from easily reaching production.
 
+---
 
-This prevents an uncontrolled change from easily reaching the production workflow.
+## 21. Security Principles Learned
 
+### Principle 1 — Protect important branches
 
-
-19\. Security Principles Learned
-
-Principle 1 — Protect important branches
-
+```text
 main 🔒
-
 production 🔒
+release/* 🔒
+```
 
-release/\* 🔒
+> 💡 Wildcards like `release/*` protect every branch matching the pattern.
 
-Principle 2 — Avoid unnecessary direct pushes
+### Principle 2 — Avoid unnecessary direct pushes
 
+```text
+Feature Branch → Merge Request → Review → Merge
+```
 
-
-Use:
-
-
-
-Feature Branch
-
-&#x20;    ↓
-
-Merge Request
-
-&#x20;    ↓
-
-Review
-
-&#x20;    ↓
-
-Merge
-
-Principle 3 — Disable unnecessary force pushes
-
-
+### Principle 3 — Disable force pushes on important branches
 
 Force pushes can rewrite branch history.
 
-
-
-For important branches:
-
-
-
+```text
 Force Push → OFF
+```
 
-Principle 4 — Use role-based access
+### Principle 4 — Use role-based access
 
+Give users only the permissions they need — the **Principle of Least Privilege**.
 
+---
 
-Give users only the permissions they need.
+# 📋 Summary
 
+## 22. Important Commands
 
+| Command | Purpose |
+|---|---|
+| `git branch --show-current` | Check current branch |
+| `git status` | Check repository state |
+| `git switch -c <branch>` | Create and switch to a branch |
+| `git push -u origin <branch>` | Push a branch and set upstream |
+| `git fetch origin` | Fetch remote information |
+| `git rebase origin/main` | Replay your commits on top of the latest `main` |
+| `git log --oneline -3` | View recent commits |
+| `git push origin HEAD:main` | Attempt a direct push to `main` (testing only) |
+| `git push origin --delete <branch>` | Delete a remote branch |
 
-This follows the principle of:
+---
 
-
-
-Least Privilege
-
-
-
-20\. Important Commands
-
-Check current branch
-
-git branch --show-current
-
-Check status
-
-git status
-
-Create a branch
-
-git switch -c feature/my-feature
-
-Push a branch
-
-git push -u origin feature/my-feature
-
-Fetch remote information
-
-git fetch origin
-
-View recent commits
-
-git log --oneline -3
-
-Attempt a direct push
-
-git push origin HEAD:main
-
-21\. Key Takeaways
-
-
+## 23. Key Takeaways
 
 After completing Lesson 9, I understand:
 
+- [x] What a protected branch is
+- [x] Why `main` should be protected
+- [x] The difference between a normal branch and a protected branch
+- [x] How protected branches support the Merge Request workflow
+- [x] The meaning of **Allowed to merge**
+- [x] The meaning of **Allowed to push and merge**
+- [x] Why force push should be disabled on important branches
+- [x] How GitLab roles and branch protection work together
+- [x] How to configure protection for `main`
+- [x] The difference between Git's history (fast-forward) rejection and GitLab's protected-branch permission rejection
+- [x] Why protected branches are important in production DevOps workflows
 
+---
 
-What a protected branch is.
+## 24. Lesson 9 Completion
 
-Why main should be protected.
+| Item | Status |
+|---|---|
+| Theory | ✅ |
+| Layman explanation | ✅ |
+| Production example | ✅ |
+| `main` protection configured | ✅ |
+| Test branch | ✅ |
+| Commit practice | ✅ |
+| Push practice | ✅ |
+| Git vs GitLab rejection understood | ✅ |
+| Security concepts | ✅ |
 
-The difference between a normal branch and a protected branch.
+---
 
-How protected branches support the Merge Request workflow.
+### ✅ Status: Lesson 9 — Completed
 
-The meaning of "Allowed to merge".
+---
 
-The meaning of "Allowed to push and merge".
-
-Why force push should normally be disabled on important branches.
-
-How GitLab roles and branch protection work together.
-
-How to configure protection for main.
-
-The difference between Git's history/fast-forward rejection and GitLab's protected-branch permission rejection.
-
-Why protected branches are important in production DevOps workflows.
-
-22\. Lesson 9 Completion
-
-Lesson 9 — GitLab Protected Branches \& Repository Security
-
-
-
-Theory              ✅
-
-Layman explanation   ✅
-
-Production example  ✅
-
-main protection     ✅
-
-Test branch         ✅
-
-Commit practice     ✅
-
-Push practice       ✅
-
-Security concepts   ✅
-
-
-
-Status: Lesson 9 Complete
-
+⬅️ **Previous:** Lesson 8 — GitLab Users, Groups & Permissions | ➡️ **Next:** Lesson 10
