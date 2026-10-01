@@ -624,6 +624,3 @@ After completing Lesson 9, I understand:
 
 ### ✅ Status: Lesson 9 — Completed
 
----
-
-⬅️ **Previous:** Lesson 8 — GitLab Users, Groups & Permissions | ➡️ **Next:** Lesson 10
