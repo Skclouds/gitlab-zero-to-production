@@ -1,1020 +1,778 @@
-Lesson 16 — Java CI/CD with GitLab
+# Lesson 16 — Java CI/CD with GitLab
 
+## 🎯 Objective
 
+The objective of this lesson was to implement a **real Java CI/CD pipeline** using GitLab CI/CD, Maven, JUnit, and the self-managed Windows GitLab Runner from Lesson 14.
 
-\## Objective
-
-
-
-The objective of this lesson is to implement a real Java CI/CD pipeline using GitLab CI/CD, Maven, JUnit, and a self-managed Windows GitLab Runner.
-
-
-
-By the end of this lesson, the following workflow was implemented:
-
-
-
-Developer
-
-&#x20;   ↓
-
-GitLab Repository
-
-&#x20;   ↓
-
-GitLab CI/CD Pipeline
-
-&#x20;   ↓
-
-Windows GitLab Runner
-
-&#x20;   ↓
-
-Maven Build
-
-&#x20;   ↓
-
-JUnit Tests
-
-&#x20;   ↓
-
-Maven Package
-
-&#x20;   ↓
-
-JAR Artifact
-
-&#x20;   ↓
-
-Download from GitLab
-
-
-
-\---
-
-
-
-\# 1. Technologies Used
-
-
-
-| Technology | Purpose |
-
-|---|---|
-
-| Java 21 LTS | Application development |
-
-| Maven | Build and dependency management |
-
-| JUnit 5 | Unit testing |
-
-| GitLab | Source code and CI/CD |
-
-| GitLab Runner | CI/CD job execution |
-
-| Windows | Self-managed Runner environment |
-
-| Git | Version control |
-
-
-
-\---
-
-
-
-\# 2. GitLab Branch
-
-
-
-The lesson was implemented on:
-
-
+Workflow implemented:
 
 ```text
+Developer
+    ↓
+GitLab Repository
+    ↓
+GitLab CI/CD Pipeline
+    ↓
+Windows GitLab Runner
+    ↓
+Maven Build
+    ↓
+JUnit Tests
+    ↓
+Maven Package
+    ↓
+JAR Artifact
+    ↓
+Download from GitLab
+```
 
+---
+
+## 📚 Table of Contents
+
+**Setup**
+
+1. [Technologies Used](#1-technologies-used)
+2. [GitLab Branch](#2-gitlab-branch)
+3. [Java Project Structure](#3-java-project-structure)
+4. [Maven `pom.xml`](#4-maven-pomxml)
+5. [Maven Project Identity](#5-maven-project-identity)
+6. [JUnit Dependency](#6-junit-dependency)
+7. [Java Application](#7-java-application)
+8. [Unit Test](#8-unit-test)
+9. [`.gitignore`](#9-gitignore)
+
+**Maven Locally**
+
+10. [Maven Compile](#10-maven-compile)
+11. [Maven Test](#11-maven-test)
+12. [Maven Package](#12-maven-package)
+13. [Maven Clean, Verify, and the Lifecycle](#13-maven-clean-verify-and-the-lifecycle)
+
+**GitLab CI/CD**
+
+14. [First Java Pipeline](#14-first-java-pipeline)
+15. [GitLab Runner](#15-gitlab-runner)
+16. [Pipeline Stages](#16-pipeline-stages)
+17. [Successful Java Pipeline](#17-successful-java-pipeline)
+18. [GitLab CI Artifacts](#18-gitlab-ci-artifacts)
+19. [Maven Dependency Cache](#19-maven-dependency-cache)
+20. [Java and Maven Environment Verification](#20-java-and-maven-environment-verification)
+21. [Pipeline Failure Handling](#21-pipeline-failure-handling)
+22. [JUnit Reports](#22-junit-reports)
+23. [Consolidated `.gitlab-ci.yml`](#23-consolidated-gitlab-ciyml)
+
+**Summary**
+
+24. [Final CI/CD Concept](#24-final-cicd-concept)
+25. [Commands Practiced](#25-commands-practiced)
+26. [Key Learnings](#26-key-learnings)
+27. [Lesson 16 Outcome](#27-lesson-16-outcome)
+
+---
+
+## 1. Technologies Used
+
+| Technology | Purpose |
+|---|---|
+| Java 21 LTS | Application development |
+| Maven | Build and dependency management |
+| JUnit 5 | Unit testing |
+| GitLab | Source code and CI/CD |
+| GitLab Runner | CI/CD job execution |
+| Windows | Self-managed Runner environment |
+| Git | Version control |
+
+---
+
+## 2. GitLab Branch
+
+```text
 feature/lesson16-java-cicd
+```
 
+---
 
+## 3. Java Project Structure
 
-3\. Java Project Structure
+The application uses the **standard Maven project structure**:
 
-The Java application was created using a standard Maven project structure.
-
+```text
 student-management/
-
 │
-
 ├── .gitignore
-
 ├── pom.xml
-
 │
-
 └── src/
+    ├── main/
+    │   └── java/
+    │       └── com/
+    │           └── gitlab/
+    │               └── student/
+    │                   └── StudentApp.java
+    │
+    └── test/
+        └── java/
+            └── com/
+                └── gitlab/
+                    └── student/
+                        └── StudentAppTest.java
+```
 
-&#x20;   ├── main/
+| Folder | Contains |
+|---|---|
+| `src/main/java` | Application code (goes into the JAR) |
+| `src/test/java` | Test code (run by Maven, not shipped) |
 
-&#x20;   │   └── java/
+> 💡 The folder path `com/gitlab/student` must match the Java `package com.gitlab.student;` declaration.
 
-&#x20;   │       └── com/
+---
 
-&#x20;   │           └── gitlab/
+## 4. Maven `pom.xml`
 
-&#x20;   │               └── student/
+`pom.xml` (**Project Object Model**) is the main Maven configuration file. It defines:
 
-&#x20;   │                   └── StudentApp.java
+- Project identity
+- Artifact name
+- Project version
+- Java version
+- Dependencies
+- Build configuration
 
-&#x20;   │
+The project targets **Java 21**:
 
-&#x20;   └── test/
-
-&#x20;       └── java/
-
-&#x20;           └── com/
-
-&#x20;               └── gitlab/
-
-&#x20;                   └── student/
-
-&#x20;                       └── StudentAppTest.java
-
-
-
-4\. Maven pom.xml
-
-The pom.xml is the main configuration file for the Maven project.
-
-It defines:
-
-\- Project identity
-
-\- Artifact name
-
-\- Project version
-
-\- Java version
-
-\- Dependencies
-
-\- Build configuration
-
-The project was configured for Java 21.
-
+```xml
 <properties>
-
-&#x20;   <maven.compiler.source>21</maven.compiler.source>
-
-&#x20;   <maven.compiler.target>21</maven.compiler.target>
-
-&#x20;   <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 </properties>
+```
 
+> 💡 On modern Maven, `<maven.compiler.release>21</maven.compiler.release>` can replace `source` + `target` and is slightly safer.
 
+---
 
-5\. Maven Project Identity
+## 5. Maven Project Identity
 
-The project uses:
-
+```xml
 <groupId>com.gitlab.student</groupId>
-
 <artifactId>student-management</artifactId>
-
 <version>1.0-SNAPSHOT</version>
+```
 
+| Element | Identifies | Value |
+|---|---|---|
+| `groupId` | Organization or project group | `com.gitlab.student` |
+| `artifactId` | The application | `student-management` |
+| `version` | Current project version | `1.0-SNAPSHOT` |
 
+The resulting JAR name is built from `artifactId` + `version`:
 
-groupId
-
-Identifies the organization or project group.
-
-artifactId
-
-Identifies the application.
-
-version
-
-Defines the current project version.
-
-The resulting JAR was:
-
+```text
 student-management-1.0-SNAPSHOT.jar
+```
 
+> 💡 `SNAPSHOT` means "work in progress" — a development version, not a final release.
 
+---
 
-6\. JUnit Dependency
+## 6. JUnit Dependency
 
-JUnit 5 was added as a test dependency.
+JUnit 5 was added as a **test** dependency:
 
+```xml
 <dependency>
-
-&#x20;   <groupId>org.junit.jupiter</groupId>
-
-&#x20;   <artifactId>junit-jupiter</artifactId>
-
-&#x20;   <version>5.13.4</version>
-
-&#x20;   <scope>test</scope>
-
+    <groupId>org.junit.jupiter</groupId>
+    <artifactId>junit-jupiter</artifactId>
+    <version>5.13.4</version>
+    <scope>test</scope>
 </dependency>
+```
 
+`<scope>test</scope>` means the dependency is used **only for testing** — it's not part of the production application or JAR.
 
+> 💡 JUnit 5 tests are run by the **Maven Surefire plugin**. Older Surefire versions silently run **zero** tests with JUnit 5. If tests ever "pass" with `Tests run: 0`, pin a recent Surefire version in `<build><plugins>`.
 
-The test scope means the dependency is required for testing rather than being part of the production application.
+---
 
-7\. Java Application
+## 7. Java Application
 
-The main application was created at:
+`src/main/java/com/gitlab/student/StudentApp.java`:
 
-src/main/java/com/gitlab/student/StudentApp.java
-
-
-
-Implementation:
-
+```java
 package com.gitlab.student;
-
-
 
 public class StudentApp {
 
-
-
-&#x20;   public static void main(String\[] args) {
-
-&#x20;       System.out.println("Student Management Application");
-
-&#x20;       System.out.println("Java CI/CD with GitLab");
-
-&#x20;   }
-
+    public static void main(String[] args) {
+        System.out.println("Student Management Application");
+        System.out.println("Java CI/CD with GitLab");
+    }
 }
+```
 
+---
 
+## 8. Unit Test
 
-8\. Unit Test
+`src/test/java/com/gitlab/student/StudentAppTest.java`:
 
-The test was created at:
-
-src/test/java/com/gitlab/student/StudentAppTest.java
-
-
-
-Implementation:
-
+```java
 package com.gitlab.student;
-
-
 
 import org.junit.jupiter.api.Test;
 
-
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
-
-
 
 class StudentAppTest {
 
+    @Test
+    void applicationNameShouldBeCorrect() {
 
+        String applicationName = "Student Management Application";
 
-&#x20;   @Test
-
-&#x20;   void applicationNameShouldBeCorrect() {
-
-
-
-&#x20;       String applicationName = "Student Management Application";
-
-
-
-&#x20;       assertEquals(
-
-&#x20;               "Student Management Application",
-
-&#x20;               applicationName
-
-&#x20;       );
-
-&#x20;   }
-
+        assertEquals(
+                "Student Management Application",
+                applicationName
+        );
+    }
 }
-
-
+```
 
 The test validates that the expected application name matches the actual value.
 
-9\. .gitignore
+> ⚠️ **Improvement for later:** This test compares a string to itself, so it doesn't actually check `StudentApp`. A real test calls application code — for example, add a method to `StudentApp`:
+> ```java
+> public static String getApplicationName() {
+>     return "Student Management Application";
+> }
+> ```
+> and test it:
+> ```java
+> assertEquals("Student Management Application", StudentApp.getApplicationName());
+> ```
+> Now the test fails if someone changes the application's behavior — which is the whole point of CI.
 
-Maven generates build output inside the target directory.
+---
 
-The project therefore uses:
+## 9. `.gitignore`
 
+Maven writes build output to the `target/` directory, so it's excluded from Git:
+
+```gitignore
 target/
+.m2/
+```
 
+> 💡 `.m2/` is added because the CI cache configuration (section 19) creates a local Maven repository inside the project folder.
 
+The repository stores **source code and configuration**; CI **generates** the build output.
 
-This prevents generated Maven build files from being committed to Git.
+---
 
-The repository contains source code and configuration, while CI generates the build output.
+# 🔨 Maven Locally
 
-10\. Maven Compile
+## 10. Maven Compile
 
-The first Maven command tested was:
-
+```bash
 mvn compile
+```
 
+Compiles the Java source code: `StudentApp.java` → `StudentApp.class`
 
-
-This compiles the Java source code.
-
-The source:
-
-StudentApp.java
-
-
-
-was converted into:
-
-StudentApp.class
-
-
-
-under:
-
-target/classes/
-
-
-
-The resulting structure included:
-
+```text
 target/
-
 └── classes/
+    └── com/
+        └── gitlab/
+            └── student/
+                └── StudentApp.class
+```
 
-&#x20;   └── com/
+---
 
-&#x20;       └── gitlab/
+## 11. Maven Test
 
-&#x20;           └── student/
-
-&#x20;               └── StudentApp.class
-
-
-
-11\. Maven Test
-
-The unit tests were executed using:
-
+```bash
 mvn test
-
-
+```
 
 Maven:
 
-1\. Compiled the application
+1. Compiled the application
+2. Compiled the test code
+3. Executed the JUnit test
+4. Generated test reports
 
-2\. Compiled the test code
+✅ The test passed.
 
-3\. Executed the JUnit test
+---
 
-4\. Generated test reports
+## 12. Maven Package
 
-The test successfully passed.
-
-12\. Maven Package
-
-The application was packaged using:
-
+```bash
 mvn package
+```
 
+Generated:
 
-
-Maven generated:
-
+```text
 target/student-management-1.0-SNAPSHOT.jar
+```
 
+The JAR was inspected:
 
+```bash
+jar tf target\student-management-1.0-SNAPSHOT.jar
+```
 
-The JAR was inspected using:
+It contained:
 
-jar tf target\\student-management-1.0-SNAPSHOT.jar
-
-
-
-The JAR contained:
-
+```text
 com/gitlab/student/StudentApp.class
+```
 
+✅ This verified the compiled application was actually inside the JAR.
 
+> 💡 A JAR is just a **ZIP file** of compiled classes plus metadata — `jar tf` lists its contents.
 
-This verified that the compiled application was actually included inside the JAR.
+---
 
-13\. Maven Clean and Verify
+## 13. Maven Clean, Verify, and the Lifecycle
 
-The Maven lifecycle was also explored using:
-
+```bash
 mvn clean verify
+```
 
+| Command | What it does |
+|---|---|
+| `clean` | Deletes previous build output (`target/`) |
+| `verify` | Runs all earlier phases, then any configured verification checks |
 
+### The Maven lifecycle
 
-clean removes previous build output.
-
-verify runs the required earlier lifecycle phases and performs verification configured for the project.
-
-The Maven lifecycle concept was studied as:
-
+```text
 validate
-
-&#x20;   ↓
-
+    ↓
 compile
-
-&#x20;   ↓
-
+    ↓
 test
-
-&#x20;   ↓
-
+    ↓
 package
-
-&#x20;   ↓
-
+    ↓
 verify
-
-&#x20;   ↓
-
+    ↓
 install
-
-&#x20;   ↓
-
+    ↓
 deploy
+```
 
+> 🧠 **Key rule:** Running a phase runs **every phase before it**. `mvn package` automatically runs `validate → compile → test → package`.
 
+| Phase | Meaning |
+|---|---|
+| `install` | Copies the JAR to your local `~/.m2` repository |
+| `deploy` | Uploads the JAR to a remote repository (e.g. JFrog Artifactory — later lesson) |
 
-14\. First GitLab CI/CD Pipeline
+---
 
-The first Java pipeline was created using .gitlab-ci.yml.
+# ⚙️ GitLab CI/CD
 
-Initial pipeline:
+## 14. First Java Pipeline
 
+```yaml
 stages:
-
-&#x20; - build
-
-&#x20; - test
-
-&#x20; - package
-
-
+  - build
+  - test
+  - package
 
 build:
-
-&#x20; stage: build
-
-&#x20; tags:
-
-&#x20;   - windows
-
-&#x20; script:
-
-&#x20;   - cd student-management
-
-&#x20;   - mvn compile
-
-
+  stage: build
+  tags:
+    - windows
+  script:
+    - cd student-management
+    - mvn compile
 
 test:
-
-&#x20; stage: test
-
-&#x20; tags:
-
-&#x20;   - windows
-
-&#x20; script:
-
-&#x20;   - cd student-management
-
-&#x20;   - mvn test
-
-
+  stage: test
+  tags:
+    - windows
+  script:
+    - cd student-management
+    - mvn test
 
 package:
+  stage: package
+  tags:
+    - windows
+  script:
+    - cd student-management
+    - mvn package
+```
 
-&#x20; stage: package
+> 💡 Each job starts in the repository root, so every job needs `cd student-management` — the working directory does not carry over between jobs.
 
-&#x20; tags:
+---
 
-&#x20;   - windows
+## 15. GitLab Runner
 
-&#x20; script:
+The pipeline used the self-managed Windows Runner from Lesson 14, selected by tag:
 
-&#x20;   - cd student-management
-
-&#x20;   - mvn package
-
-
-
-15\. GitLab Runner
-
-The pipeline used the previously configured self-managed Windows GitLab Runner.
-
-Runner tag:
-
-windows
-
-
-
-The jobs therefore included:
-
+```yaml
 tags:
+  - windows
+```
 
-&#x20; - windows
-
-
-
-This tells GitLab to select the Windows Runner for these jobs.
-
-The architecture was:
-
+```text
 GitLab
+   │
+   │ CI/CD Job
+   ↓
+Windows GitLab Runner (shell executor)
+   │
+   ├── Java 21
+   └── Maven
+```
 
-&#x20;  │
+> ⚠️ With the **Shell** executor, Java 21 and Maven must be installed on the Runner machine and on the `PATH` of the account the Runner service uses (Local System by default).
 
-&#x20;  │ CI/CD Job
+---
 
-&#x20;  ↓
+## 16. Pipeline Stages
 
-Windows GitLab Runner
-
-&#x20;  │
-
-&#x20;  ├── Java 21
-
-&#x20;  └── Maven
-
-
-
-16\. Pipeline Stages
-
-The Java pipeline contains three stages:
-
+```text
 BUILD
-
-&#x20; ↓
-
+  ↓
 TEST
-
-&#x20; ↓
-
+  ↓
 PACKAGE
+```
 
+| Stage | Command | Purpose |
+|---|---|---|
+| Build | `mvn compile` | Compiles the Java application |
+| Test | `mvn test` | Runs the JUnit tests |
+| Package | `mvn package` | Creates the JAR file |
 
+> 💡 Because of the lifecycle rule (section 13), `mvn test` recompiles and `mvn package` re-runs the tests. That's fine for learning. In larger projects, teams often use `mvn package -DskipTests` in the package job, since tests already passed in the previous stage.
 
-Build
+---
 
-mvn compile
+## 17. Successful Java Pipeline
 
-
-
-Compiles the Java application.
-
-Test
-
-mvn test
-
-
-
-Runs the JUnit tests.
-
-Package
-
-mvn package
-
-
-
-Creates the JAR file.
-
-17\. Successful Java CI/CD Pipeline
-
-The first complete Java pipeline successfully executed:
-
+```text
 BUILD      ✅
-
 TEST       ✅
-
 PACKAGE    ✅
+```
 
+The pipeline successfully executed Maven on the self-managed Windows Runner, confirming the Java/Maven environment works inside GitLab CI/CD.
 
+---
 
-The pipeline successfully executed Maven commands on the self-managed Windows GitLab Runner.
+## 18. GitLab CI Artifacts
 
-This confirmed that the Java/Maven environment was working correctly inside GitLab CI/CD.
+Initially, the JAR existed only inside the Runner's workspace. GitLab was configured to **keep it as a CI artifact**:
 
-18\. GitLab CI Artifacts
-
-Initially, Maven generated the JAR only inside the Runner workspace.
-
-GitLab was then configured to preserve the JAR as a CI artifact.
-
-The package job was configured as:
-
+```yaml
 package:
+  stage: package
+  tags:
+    - windows
+  script:
+    - cd student-management
+    - mvn package
+  artifacts:
+    paths:
+      - student-management/target/*.jar
+    expire_in: 1 week
+```
 
-&#x20; stage: package
+The path `student-management/target/*.jar` tells GitLab to collect all generated JAR files. After the pipeline finishes, the JAR can be **downloaded** from the job page.
 
-&#x20; tags:
+> 💡 Artifact paths are relative to the **repository root**, even though the script did `cd student-management`.
+> 💡 `expire_in` controls how long GitLab keeps the artifact. Without it, the instance default applies.
 
-&#x20;   - windows
+---
 
-&#x20; script:
+## 19. Maven Dependency Cache
 
-&#x20;   - cd student-management
+Maven was told to store dependencies in a project-local repository, and GitLab was told to cache it:
 
-&#x20;   - mvn package
-
-&#x20; artifacts:
-
-&#x20;   paths:
-
-&#x20;     - student-management/target/\*.jar
-
-
-
-The artifact path:
-
-student-management/target/\*.jar
-
-
-
-tells GitLab to collect generated JAR files from the Maven target directory.
-
-The JAR could then be downloaded from GitLab after the pipeline completed.
-
-19\. Maven Dependency Cache
-
-Maven dependencies were configured to use a project-local repository:
-
+```yaml
 variables:
-
-&#x20; MAVEN\_OPTS: "-Dmaven.repo.local=.m2/repository"
-
-
-
-GitLab caching was configured with:
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
 
 cache:
+  paths:
+    - .m2/repository
+```
 
-&#x20; paths:
-
-&#x20;   - .m2/repository
-
-
-
-The concept is:
-
+```text
 First Pipeline
-
-&#x20;     ↓
-
+      ↓
 Download Maven dependencies
-
-&#x20;     ↓
-
+      ↓
 .m2/repository
-
-&#x20;     ↓
-
+      ↓
 GitLab Cache
 
-
-
 Future Pipeline
-
-&#x20;     ↓
-
+      ↓
 Reuse cached dependencies
+      ↓
+Reduced dependency downloads ⚡
+```
 
-&#x20;     ↓
+> ⚠️ **Path must match:** Use `$CI_PROJECT_DIR/.m2/repository` (an absolute path), **not** `.m2/repository`. Because each job runs `cd student-management`, a relative path would put the dependencies in `student-management/.m2/repository` — but the cache saves `.m2/repository` at the repository root. The two paths wouldn't match, and nothing would be cached.
 
-Reduced dependency downloads
+> 💡 With a **Shell** executor, Maven's default `~/.m2` folder already persists on the Runner machine between jobs. Explicit caching matters most with **Docker/Kubernetes** executors, where every job starts in a fresh container.
 
+### Cache vs Artifacts
 
+| | Cache | Artifacts |
+|---|---|---|
+| Purpose | Speed up future pipelines | Keep job **outputs** |
+| Example | Maven dependencies | The built JAR, test reports |
+| Downloadable from GitLab UI | ❌ | ✅ |
+| Guaranteed to exist | ❌ Best effort | ✅ Until expiry |
 
-Caching can help improve pipeline performance.
+---
 
-20\. Java and Maven Environment Verification
+## 20. Java and Maven Environment Verification
 
-The CI environment was verified using:
+The CI environment was verified with:
 
-\- java --version
+```yaml
+script:
+  - java --version
+  - mvn --version
+```
 
-\- mvn --version
+The **developer machine** and the **Runner** are separate environments:
 
+```text
+Developer Machine          GitLab Runner
+   Java + Maven      ≠       Java + Maven
+```
 
+Printing versions in the job log helps diagnose **"it works on my machine"** problems.
 
-This is useful because the local developer environment and CI Runner environment are separate.
+---
 
-The pipeline should verify the environment in which the application is actually being built.
+## 21. Pipeline Failure Handling
 
-Concept:
+A unit test was **intentionally broken**:
 
-Developer Machine
-
-&#x20;     ↓
-
-Java + Maven
-
-
-
-&#x20;       ≠
-
-
-
-GitLab Runner
-
-&#x20;     ↓
-
-Java + Maven
-
-
-
-Environment verification helps diagnose:
-
-"It works on my machine"
-
-
-
-type problems.
-
-21\. Pipeline Failure Handling
-
-A Java unit test was intentionally changed to fail.
-
-The test compared:
-
+```text
 Expected: Wrong Application Name
-
 Actual:   Student Management Application
+```
 
+Result:
 
-
-This caused the test stage to fail.
-
-Expected CI/CD behavior:
-
+```text
 BUILD      ✅
-
-&#x20;  ↓
-
+   ↓
 TEST       ❌
+   ↓
+PACKAGE    ⏹️ (skipped)
+```
 
-&#x20;  ↓
+> 🧠 **CI/CD principle:** A failed quality check must **stop** later stages. A broken build should never be packaged or deployed.
 
-PACKAGE    ⏹️
+The test was then corrected, and the pipeline returned to green. ✅
 
+---
 
+## 22. JUnit Reports
 
-This demonstrated an important CI/CD principle:
+Maven Surefire writes JUnit-compatible XML reports to:
 
-A failed quality check should prevent later stages from continuing.
-
-
-
-The test was then corrected and the pipeline returned to a successful state.
-
-22\. JUnit Reports
-
-Maven Surefire generates JUnit-compatible XML reports under:
-
+```text
 student-management/target/surefire-reports/
+```
 
+GitLab reads them with:
 
+```yaml
+test:
+  stage: test
+  tags:
+    - windows
+  script:
+    - cd student-management
+    - mvn test
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - student-management/target/surefire-reports/*.xml
+```
 
-GitLab can consume these reports using:
+GitLab then shows a **Tests** tab on the pipeline, listing each test with pass/fail status — and shows test results directly in Merge Requests.
 
-artifacts:
+> ⚠️ `when: always` is important: by default, artifacts are only collected when a job **succeeds** — but the test report is most useful precisely when tests **fail**.
 
-&#x20; when: always
+---
 
-&#x20; reports:
+## 23. Consolidated `.gitlab-ci.yml`
 
-&#x20;   junit:
+All the pieces from this lesson combined into one file:
 
-&#x20;     - student-management/target/surefire-reports/\*.xml
+```yaml
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
 
+default:
+  tags:
+    - windows
+  cache:
+    paths:
+      - .m2/repository
+  before_script:
+    - java --version
+    - mvn --version
+    - cd student-management
 
+stages:
+  - build
+  - test
+  - package
 
-The use of:
+build:
+  stage: build
+  script:
+    - mvn compile
 
-when: always
+test:
+  stage: test
+  script:
+    - mvn test
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - student-management/target/surefire-reports/*.xml
 
+package:
+  stage: package
+  script:
+    - mvn package -DskipTests
+  artifacts:
+    paths:
+      - student-management/target/*.jar
+    expire_in: 1 week
+```
 
+> 💡 This uses `default` (Lesson 12) to remove repetition: every job gets the `windows` tag, the cache, the version checks, and the `cd`.
 
-is important because test reports should still be collected when the test job fails.
+---
 
-23\. Final CI/CD Concept
+# 📋 Summary
 
-The complete lesson demonstrated:
+## 24. Final CI/CD Concept
 
+```text
 Developer
-
-&#x20;   │
-
-&#x20;   ▼
-
+    │
+    ▼
 GitLab Repository
-
-&#x20;   │
-
-&#x20;   ▼
-
+    │
+    ▼
 .gitlab-ci.yml
-
-&#x20;   │
-
-&#x20;   ▼
-
+    │
+    ▼
 GitLab Pipeline
-
-&#x20;   │
-
-&#x20;   ▼
-
+    │
+    ▼
 Windows GitLab Runner
-
-&#x20;   │
-
-&#x20;   ├── Java 21
-
-&#x20;   ├── Maven
-
-&#x20;   │
-
-&#x20;   ▼
-
+    ├── Java 21
+    └── Maven
+    │
+    ▼
 Maven Compile
-
-&#x20;   │
-
-&#x20;   ▼
-
-JUnit Tests
-
-&#x20;   │
-
-&#x20;   ▼
-
+    │
+    ▼
+JUnit Tests ──► Test Report (Tests tab)
+    │
+    ▼
 Maven Package
-
-&#x20;   │
-
-&#x20;   ▼
-
+    │
+    ▼
 student-management-1.0-SNAPSHOT.jar
+    │
+    ▼
+GitLab CI Artifact ⬇️
+```
 
-&#x20;   │
+---
 
-&#x20;   ▼
+## 25. Commands Practiced
 
-GitLab CI Artifact
+| Category | Command | Purpose |
+|---|---|---|
+| Java | `java --version` | Check Java runtime |
+| Java | `javac --version` | Check Java compiler |
+| Maven | `mvn --version` | Check Maven |
+| Maven | `mvn compile` | Compile source code |
+| Maven | `mvn test` | Compile and run tests |
+| Maven | `mvn package` | Build the JAR |
+| Maven | `mvn clean verify` | Clean build through verification |
+| JAR | `jar tf target\student-management-1.0-SNAPSHOT.jar` | List JAR contents |
+| Git | `git status` / `git add .` / `git commit` / `git push` | Version control |
 
+---
 
+## 26. Key Learnings
 
-24\. Commands Practiced
+- [x] How to create a Maven Java project
+- [x] The purpose of `pom.xml`
+- [x] Maven project structure
+- [x] Java compilation with Maven
+- [x] JUnit unit testing
+- [x] The Maven lifecycle
+- [x] `mvn compile`, `test`, `package`, `clean`, `verify`
+- [x] `.gitignore` for Maven projects
+- [x] GitLab CI/CD for Java
+- [x] GitLab Runner execution
+- [x] Runner tags
+- [x] GitLab CI artifacts
+- [x] Maven dependency caching
+- [x] Cache vs artifacts
+- [x] JUnit test reports
+- [x] CI environment verification
+- [x] CI pipeline failure handling
+- [x] JAR generation and inspection
 
-Java
+---
 
-java --version
+## 27. Lesson 16 Outcome
 
-javac --version
+A complete Java Maven application was successfully integrated with GitLab CI/CD:
 
-
-
-Maven
-
-mvn --version
-
-mvn compile
-
-mvn test
-
-mvn package
-
-mvn clean verify
-
-
-
-JAR inspection
-
-jar tf target\\student-management-1.0-SNAPSHOT.jar
-
-
-
-Git
-
-git status
-
-git add .
-
-git commit
-
-git push
-
-
-
-25\. Key Learnings
-
-After completing this lesson, I understand:
-
-\- How to create a Maven Java project
-
-\- The purpose of pom.xml
-
-\- Maven project structure
-
-\- Java compilation with Maven
-
-\- JUnit unit testing
-
-\- Maven lifecycle
-
-\- Maven compile
-
-\- Maven test
-
-\- Maven package
-
-\- Maven clean
-
-\- Maven verify
-
-\- .gitignore for Maven projects
-
-\- GitLab CI/CD for Java
-
-\- GitLab Runner execution
-
-\- Runner tags
-
-\- GitLab CI artifacts
-
-\- Maven dependency caching
-
-\- JUnit test reports
-
-\- CI environment verification
-
-\- CI pipeline failure handling
-
-\- JAR generation and inspection
-
-26\. Lesson 16 Outcome
-
-A complete Java Maven application was successfully integrated with GitLab CI/CD.
-
-The final workflow is:
-
+```text
 Java Application
-
-&#x20;      ↓
-
+       ↓
 Maven
-
-&#x20;      ↓
-
+       ↓
 JUnit
-
-&#x20;      ↓
-
+       ↓
 GitLab CI/CD
-
-&#x20;      ↓
-
+       ↓
 Windows Runner
-
-&#x20;      ↓
-
-Build
-
-&#x20;      ↓
-
-Test
-
-&#x20;      ↓
-
-Package
-
-&#x20;      ↓
-
+       ↓
+Build → Test → Package
+       ↓
 JAR
-
-&#x20;      ↓
-
+       ↓
 GitLab Artifact
+```
 
+This is the foundation for integrating Java CI/CD with the advanced DevOps tools later in the roadmap: **SonarQube, GitLab security scanning, JFrog Artifactory, Docker, Terraform, and Kubernetes**.
 
+---
 
-This provides the foundation for integrating Java CI/CD with the advanced DevOps tools covered later in the roadmap, including SonarQube, GitLab security scanning, JFrog Artifactory, Docker, Terraform, and Kubernetes.
-
+### ✅ Status: Lesson 16 — Completed
