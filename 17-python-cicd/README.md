@@ -1,1068 +1,689 @@
-Lesson 17 — Python CI/CD with GitLab
+# Lesson 17 — Python CI/CD with GitLab
 
+## 🎯 Overview
 
-
-\## Overview
-
-
-
-This lesson demonstrates how to build a Python CI/CD pipeline using GitLab CI/CD and a self-managed Windows GitLab Runner.
-
-
+This lesson builds a **Python CI/CD pipeline** using GitLab CI/CD and the self-managed Windows GitLab Runner from Lesson 14.
 
 The implementation covers:
 
+- Python project structure
+- Python application development
+- Unit testing with pytest
+- Python dependency management
+- GitLab CI/CD pipeline creation
+- Self-managed Windows Runner execution
+- Python environment configuration for the Runner
+- GitLab CI/CD cache
+- JUnit test reporting
+- Python package building
+- CI/CD troubleshooting
+- Production-oriented Python CI practices
 
+---
 
-\- Python project structure
+## 📚 Table of Contents
 
-\- Python application development
+**Setup**
 
-\- Unit testing with pytest
+1. [Learning Objectives](#1-learning-objectives)
+2. [Project Architecture](#2-project-architecture)
+3. [Python Application](#3-python-application)
+4. [Python Environment](#4-python-environment)
+5. [Dependency Management](#5-dependency-management)
+6. [Unit Testing with pytest](#6-unit-testing-with-pytest)
+7. [Python Project Working Directory](#7-python-project-working-directory)
 
-\- Python dependency management
+**GitLab CI/CD**
 
-\- GitLab CI/CD pipeline creation
+8. [Initial GitLab CI Pipeline](#8-initial-gitlab-ci-pipeline)
+9. [GitLab Runner](#9-gitlab-runner)
+10. [GitLab Runner Python PATH Issue](#10-gitlab-runner-python-path-issue)
+11. [Why `python -m` Was Used](#11-why-python--m-was-used)
+12. [GitLab CI Dependency Cache](#12-gitlab-ci-dependency-cache)
+13. [Cache vs Artifact](#13-cache-vs-artifact)
+14. [JUnit Test Reporting](#14-junit-test-reporting)
+15. [Python Package Building](#15-python-package-building)
+16. [Consolidated `.gitlab-ci.yml`](#16-consolidated-gitlab-ciyml)
+17. [Python CI/CD Pipeline Flow](#17-python-cicd-pipeline-flow)
 
-\- Self-managed Windows Runner execution
+**Troubleshooting & Practices**
 
-\- Python environment configuration
+18. [Troubleshooting Performed](#18-troubleshooting-performed)
+19. [Git Best Practices Practiced](#19-git-best-practices-practiced)
+20. [Production-Oriented Practices](#20-production-oriented-practices)
 
-\- GitLab CI/CD cache
+**Summary**
 
-\- JUnit test reporting
+21. [Key Commands](#21-key-commands)
+22. [Final Outcome](#22-final-outcome)
+23. [Lesson Status](#23-lesson-status)
 
-\- Python package building
+---
 
-\- CI/CD troubleshooting
+## 1. Learning Objectives
 
-\- Production-oriented Python CI practices
+By the end of this lesson, the following were practiced:
 
+1. Create a Python application structure
+2. Create unit tests using pytest
+3. Manage Python dependencies using `requirements.txt`
+4. Execute Python tests locally
+5. Create a GitLab CI/CD pipeline
+6. Execute the pipeline on a self-managed Windows Runner
+7. Make Python available to the GitLab Runner service
+8. Use `python -m pip` and `python -m pytest`
+9. Configure GitLab CI dependency caching
+10. Generate JUnit test reports
+11. Build a Python distribution package
+12. Troubleshoot real CI/CD failures
 
+---
 
-\---
+## 2. Project Architecture
 
-
-
-\# 1. Learning Objectives
-
-
-
-By the end of this lesson, the following concepts were practiced:
-
-
-
-1\. Create a Python application structure.
-
-2\. Create unit tests using pytest.
-
-3\. Manage Python dependencies using `requirements.txt`.
-
-4\. Execute Python tests locally.
-
-5\. Create a GitLab CI/CD pipeline.
-
-6\. Execute the pipeline using a self-managed Windows Runner.
-
-7\. Configure Python availability for the GitLab Runner service.
-
-8\. Use `python -m pip` and `python -m pytest`.
-
-9\. Configure GitLab CI dependency caching.
-
-10\. Generate JUnit test reports.
-
-11\. Build a Python distribution package.
-
-12\. Troubleshoot real CI/CD failures.
-
-
-
-\---
-
-
-
-\# 2. Project Architecture
-
-
-
-The Python application was created inside the GitLab hands-on repository.
-
-
+The Python application lives inside the GitLab hands-on repository, next to the Java project from Lesson 16:
 
 ```text
-
 gitlab-zero-to-production/
-
 │
-
 ├── .gitlab-ci.yml
-
 │
-
 └── student-api/
+    │
+    ├── requirements.txt
+    ├── pyproject.toml
+    │
+    ├── src/
+    │   └── student_api/
+    │       ├── __init__.py
+    │       └── app.py
+    │
+    └── tests/
+        └── test_app.py
+```
 
-&#x20;   │
+| Path | Purpose |
+|---|---|
+| `src/student_api/` | Application code (the Python package) |
+| `src/student_api/__init__.py` | Marks the folder as a Python package |
+| `tests/` | Test code (not shipped in the package) |
+| `requirements.txt` | Dependencies to install |
+| `pyproject.toml` | Packaging configuration |
 
-&#x20;   ├── requirements.txt
+> 💡 This is the **"src layout"** — application code sits under `src/`, separate from tests. It's the layout recommended by the Python Packaging Authority.
 
-&#x20;   ├── pyproject.toml
+---
 
-&#x20;   │
+## 3. Python Application
 
-&#x20;   ├── src/
+`student-api/src/student_api/app.py`:
 
-&#x20;   │   └── student\_api/
-
-&#x20;   │       ├── \_\_init\_\_.py
-
-&#x20;   │       └── app.py
-
-&#x20;   │
-
-&#x20;   └── tests/
-
-&#x20;       └── test\_app.py
-
-
-
-3\. Python Application
-
-app.py
-
-Location:
-
-student-api/src/student\_api/app.py
-
-
-
-Implementation:
-
-def get\_application\_name():    return "Student Management API"def get\_student\_count():    return 10if \_\_name\_\_ == "\_\_main\_\_":    print(get\_application\_name())    print(f"Student count: {get\_student\_count()}")
+```python
+def get_application_name():
+    return "Student Management API"
 
 
+def get_student_count():
+    return 10
 
 
+if __name__ == "__main__":
+    print(get_application_name())
+    print(f"Student count: {get_student_count()}")
+```
 
-The application provides two simple functions:
+The application provides two functions used by the unit tests:
 
-get\_application\_name()get\_student\_count()
+```text
+get_application_name()
+get_student_count()
+```
 
+> 💡 `if __name__ == "__main__":` means the `print` lines run only when the file is executed directly — not when the tests import it.
 
+---
 
+## 4. Python Environment
 
-
-These functions are used by the unit tests.
-
-4\. Python Environment
-
-The development environment used:
-
-Python: 3.14.6
-
-pip: 26.2.1
-
-pytest: 9.1.1
-
-
+| Tool | Version |
+|---|---|
+| Python | 3.14.6 |
+| pip | 26.2.1 |
+| pytest | 9.1.1 |
 
 Python executable:
 
-C:\\Users\\ASPL-PUNE\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe
+```text
+C:\Users\ASPL-PUNE\AppData\Local\Python\pythoncore-3.14-64\python.exe
+```
 
+Verified with:
 
-
-Python was verified using:
-
+```bash
 python --version
-
-
-
-and:
-
 python -m pip --version
+```
 
+---
 
+## 5. Dependency Management
 
-5\. Dependency Management
+`student-api/requirements.txt`:
 
-The project uses:
-
-student-api/requirements.txt
-
-
-
-Content:
-
+```text
 pytest
+```
 
+Installed with:
 
-
-Dependencies were installed using:
-
+```bash
 python -m pip install -r requirements.txt
+```
+
+> 💡 Using `python -m pip` instead of plain `pip` guarantees that pip belongs to the **same Python interpreter** you are running.
+
+> ⚠️ **Reproducibility tip:** An unpinned `pytest` installs whatever version is newest on the day the pipeline runs. Pinning it (`pytest==9.1.1`) means every pipeline uses the same version, so a pytest release can't suddenly break your build.
+
+---
+
+## 6. Unit Testing with pytest
+
+`student-api/tests/test_app.py`:
+
+```python
+from src.student_api.app import get_application_name, get_student_count
 
 
-
-Using:
-
-python -m pip
+def test_application_name():
+    assert get_application_name() == "Student Management API"
 
 
+def test_student_count():
+    assert get_student_count() == 10
+```
 
-is preferred over directly calling:
+pytest automatically finds files named `test_*.py` and functions named `test_*`.
 
-pip
-
-
-
-because it ensures that pip belongs to the Python interpreter being used.
-
-6\. Unit Testing with pytest
-
-Test file:
-
-student-api/tests/test\_app.py
-
-
-
-Implementation:
-
-from src.student\_api.app import get\_application\_name, get\_student\_countdef test\_application\_name():    assert get\_application\_name() == "Student Management API"def test\_student\_count():    assert get\_student\_count() == 10
-
-
-
-
-
-Tests were executed using:
-
+```bash
 python -m pytest
+```
 
+Result:
 
-
-Successful result:
-
+```text
 collected 2 items
 
-
-
-tests\\test\_app.py ..    \[100%]
-
-
+tests\test_app.py ..    [100%]
 
 2 passed
+```
 
+> 💡 Unlike the Lesson 16 Java test, these tests call **real application functions** — if someone changes `get_student_count()`, the test catches it.
 
+---
 
-7\. Python Project Working Directory
+## 7. Python Project Working Directory
 
-One important troubleshooting lesson was the Python import path.
-
-The project structure is:
-
-student-api/
-
-├── src/
-
-└── tests/
-
-
+One important troubleshooting lesson was the **Python import path**.
 
 The tests import:
 
-from src.student\_api.app import ...
+```python
+from src.student_api.app import ...
+```
 
+so Python must be able to find a folder called `src`. That works only when pytest runs **from `student-api/`**.
 
+| Command | Result |
+|---|---|
+| `cd student-api` → `python -m pytest` | ✅ Works |
+| `python -m pytest student-api` (from repository root) | ❌ `ModuleNotFoundError: No module named 'src'` |
 
+> 💡 **Why it works:** `python -m pytest` adds the **current directory** to Python's import path. From `student-api/`, that makes the `src` folder importable. Plain `pytest` doesn't do this — which is part of why `pytest` and `python -m pytest` can behave differently.
 
+### 🔧 Cleaner long-term fix
 
-Therefore pytest should be executed from:
+Importing from `src.` works, but it isn't the usual convention. A more robust setup tells pytest where the code lives, in `pyproject.toml`:
 
-student-api/
+```toml
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+```
 
+and imports the package by its real name:
 
+```python
+from student_api.app import get_application_name, get_student_count
+```
 
-Correct:
+Now the tests don't depend on running from one specific folder.
 
-cd student-api
+---
 
-python -m pytest
+# ⚙️ GitLab CI/CD
 
+## 8. Initial GitLab CI Pipeline
 
-
-Running pytest from the repository root with:
-
-python -m pytest student-api
-
-
-
-caused:
-
-ModuleNotFoundError: No module named 'src'
-
-
-
-The issue was resolved by running pytest from the Python project's directory.
-
-8\. Initial GitLab CI Pipeline
-
-The first Python CI pipeline was created in:
-
-.gitlab-ci.yml
-
-
-
-Initial pipeline structure:
-
+```yaml
 stages:
-
-&#x20; - test
-
-
+  - test
 
 python-tests:
+  stage: test
+  tags:
+    - windows
+  script:
+    - cd student-api
+    - python --version
+    - python -m pip --version
+    - python -m pip install -r requirements.txt
+    - python -m pytest
+```
 
-&#x20; stage: test
+---
 
-&#x20; tags:
+## 9. GitLab Runner
 
-&#x20;   - windows
+The pipeline uses the self-managed Windows Runner from Lesson 14:
 
-&#x20; script:
+| Setting | Value |
+|---|---|
+| Runner | `kaushal-windows-runner` |
+| Tag | `windows` |
+| Executor | `shell` |
+| Shell | PowerShell (`powershell`) |
 
-&#x20;   - cd student-api
+Selected with:
 
-&#x20;   - python --version
-
-&#x20;   - python -m pip --version
-
-&#x20;   - python -m pip install -r requirements.txt
-
-&#x20;   - python -m pytest
-
-
-
-9\. GitLab Runner
-
-The pipeline uses the self-managed Windows Runner created during Lesson 14.
-
-Runner:
-
-kaushal-windows-runner
-
-
-
-Tag:
-
-windows
-
-
-
-Executor:
-
-shell
-
-
-
-Shell:
-
-PowerShell
-
-
-
-The pipeline selects the Runner using:
-
+```yaml
 tags:
+  - windows
+```
 
-&#x20; - windows
+---
 
+## 10. GitLab Runner Python PATH Issue
 
+The first Python pipeline **failed**:
 
-10\. GitLab Runner Python PATH Issue
-
-The first Python pipeline failed because the GitLab Runner service could not find Python.
-
-The error was:
-
+```text
 python : The term 'python' is not recognized
+```
 
+But Python worked fine from the normal user CMD. 🤔
 
+### 🔍 Cause
 
-However, Python worked from the normal user CMD.
+| Environment | Uses |
+|---|---|
+| Your CMD window | **Your user** PATH + System PATH |
+| GitLab Runner service | Runs as **Local System** → only the **System** PATH |
 
-The Python installation was:
+Python was installed under your **user profile** (`AppData\Local\...`), and its folder was only on your **user** PATH. The Runner service runs as a different account, so it never saw it.
 
-C:\\Users\\ASPL-PUNE\\AppData\\Local\\Python\\pythoncore-3.14-64
+### ✅ Solution
 
+1. Add the Python directories to the Windows **System** PATH:
+   ```text
+   C:\Users\ASPL-PUNE\AppData\Local\Python\pythoncore-3.14-64
+   C:\Users\ASPL-PUNE\AppData\Local\Python\pythoncore-3.14-64\Scripts
+   ```
+2. Restart the Runner so it picks up the new PATH (from an **administrator** prompt):
+   ```cmd
+   gitlab-runner-windows-amd64.exe restart
+   gitlab-runner-windows-amd64.exe status
+   ```
+   ```text
+   gitlab-runner: Service is running
+   ```
+3. Verify in the job log:
+   ```text
+   Python 3.14.6
+   ```
 
+> 💡 A Windows service reads environment variables **only when it starts** — that's why the restart is required.
 
-The Python directories were added to the Windows System PATH.
+> 🏭 **Production note:** Pointing the System PATH at one user's `AppData` folder works, but it ties the Runner to that user's profile. For a shared Runner machine, installing Python **for all users** (e.g. under `C:\Program Files`) is cleaner.
 
-After restarting the GitLab Runner service:
+---
 
-gitlab-runner-windows-amd64.exe restart
+## 11. Why `python -m` Was Used
 
+| Instead of | The pipeline uses | Why |
+|---|---|---|
+| `pytest` | `python -m pytest` | Works even if the `pytest.exe` script folder isn't on PATH; also adds the current directory to the import path |
+| `pip install` | `python -m pip install` | Guarantees pip matches the Python interpreter being used |
 
+---
 
-Python became available to the Runner environment.
+## 12. GitLab CI Dependency Cache
 
-Verification:
+pip caching was configured to speed up pipelines:
 
-python --version
-
-
-
-Result:
-
-Python 3.14.6
-
-
-
-Runner status:
-
-gitlab-runner-windows-amd64.exe status
-
-
-
-Result:
-
-gitlab-runner: Service is running
-
-
-
-11\. Why python -m pytest Was Used
-
-Instead of:
-
-pytest
-
-
-
-the pipeline uses:
-
-python -m pytest
-
-
-
-Similarly, instead of:
-
-pip install
-
-
-
-the pipeline uses:
-
-python -m pip install
-
-
-
-This avoids problems where the standalone pytest or pip executable is not available in PATH.
-
-12\. GitLab CI Dependency Cache
-
-To improve pipeline efficiency, pip caching was configured.
-
+```yaml
 variables:
-
-&#x20; PIP\_CACHE\_DIR: "$CI\_PROJECT\_DIR/.cache/pip"
-
-
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
 
 cache:
+  key: pip
+  paths:
+    - .cache/pip
+```
 
-&#x20; paths:
-
-&#x20;   - .cache/pip
-
-
-
-The cache allows Python package downloads to be reused between pipeline executions when the cache is available.
-
-Conceptually:
-
+```text
 First Pipeline
-
-&#x20;     ↓
-
+      ↓
 Download dependencies
-
-&#x20;     ↓
-
+      ↓
 Store pip cache
-
-&#x20;     ↓
-
+      ↓
 Pipeline completes
 
-
-
 Next Pipeline
-
-&#x20;     ↓
-
+      ↓
 Restore cache
-
-&#x20;     ↓
-
+      ↓
 Reuse cached packages
+      ↓
+Faster dependency installation ⚡
+```
 
-&#x20;     ↓
+> ✅ `$CI_PROJECT_DIR` makes the path absolute, so it matches the cache path even after `cd student-api` (the same trap as Lesson 16's Maven cache).
 
-Faster dependency installation
+> 💡 **Cache key:** If Java and Python jobs live in the **same** `.gitlab-ci.yml`, give each cache its own `key:` (e.g. `pip` and `maven`). Jobs with the same key share one cache, and can overwrite each other's contents.
 
+---
 
+## 13. Cache vs Artifact
 
-13\. Cache vs Artifact
+| Feature | Cache | Artifact |
+|---|---|---|
+| Primary purpose | Speed up future jobs | Preserve job output |
+| Example | pip cache | Python package, test report |
+| Usage | Reuse dependencies | Download / share output |
+| Lifecycle | Temporary, best effort | Kept until expiry |
+| Downloadable from GitLab UI | ❌ | ✅ |
 
-GitLab CI cache and artifacts serve different purposes.
+---
 
-Feature	Cache	Artifact
+## 14. JUnit Test Reporting
 
-Primary purpose	Speed up future jobs	Preserve job output
+pytest can write a JUnit-compatible XML report:
 
-Example	pip cache	Python package
+```yaml
+- python -m pytest --junitxml=pytest-report.xml
+```
 
-Usage	Reuse dependencies	Download/share output
+GitLab reads it with:
 
-Lifecycle	Temporary/reusable	Pipeline job output
-
-
-
-
-
-14\. JUnit Test Reporting
-
-The pipeline was enhanced to generate a JUnit-compatible test report.
-
-Pytest command:
-
-\- python -m pytest --junitxml=pytest-report.xml
-
-
-
-GitLab configuration:
-
+```yaml
 artifacts:
+  when: always
+  reports:
+    junit:
+      - student-api/pytest-report.xml
+```
 
-&#x20; when: always
-
-&#x20; reports:
-
-&#x20;   junit:
-
-&#x20;     - student-api/pytest-report.xml
-
-
-
-The flow becomes:
-
+```text
 pytest
-
-&#x20;  ↓
-
+   ↓
 pytest-report.xml
-
-&#x20;  ↓
-
+   ↓
 GitLab CI
-
-&#x20;  ↓
-
+   ↓
 JUnit Test Report
+   ↓
+GitLab Test Results (Tests tab)
+```
 
-&#x20;  ↓
+> ⚠️ `when: always` ensures the report is collected **even when tests fail** — which is when you need it most.
 
-GitLab Test Results
+> 💡 The report path is relative to the **repository root** (`student-api/pytest-report.xml`), even though pytest ran inside `student-api/`.
 
+---
 
+## 15. Python Package Building
 
-The use of:
+The project was prepared for packaging with `pyproject.toml`:
 
-when: always
+```toml
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
 
-
-
-ensures the test report can still be collected when tests fail.
-
-15\. Python Package Building
-
-The project was also prepared for Python packaging using:
-
-pyproject.toml
-
-
-
-Configuration:
-
-\[build-system]
-
-requires = \["setuptools>=61"]
-
-build-backend = "setuptools.build\_meta"
-
-
-
-\[project]
-
+[project]
 name = "student-management-api"
-
 version = "1.0.0"
-
 description = "Student Management API"
-
 requires-python = ">=3.14"
+```
 
+Install the build tool and build:
 
-
-The Python build tool was installed using:
-
+```bash
 python -m pip install build
-
-
-
-The package was built using:
-
 python -m build
+```
 
+Output in `dist/`:
 
+| File | Type | Purpose |
+|---|---|---|
+| `*.whl` | **Wheel** (built distribution) | Ready to install quickly with pip |
+| `*.tar.gz` | **sdist** (source distribution) | Source package, built on install |
 
-This generates Python distribution packages in:
+> ☕ **Java comparison:** The `.whl` file plays the same role as the `.jar` from Lesson 16 — the packaged, shippable output of the build.
 
-dist/
+---
 
+## 16. Consolidated `.gitlab-ci.yml`
 
+All pieces from this lesson in one file, including a package job that saves the wheel as an artifact:
 
-Typical package formats include:
+```yaml
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
 
-.whl
+stages:
+  - test
+  - package
 
-.tar.gz
+default:
+  tags:
+    - windows
+  cache:
+    key: pip
+    paths:
+      - .cache/pip
+  before_script:
+    - cd student-api
+    - python --version
+    - python -m pip --version
+    - python -m pip install -r requirements.txt
 
+python-tests:
+  stage: test
+  script:
+    - python -m pytest --junitxml=pytest-report.xml
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - student-api/pytest-report.xml
 
+python-package:
+  stage: package
+  script:
+    - python -m pip install build
+    - python -m build
+  artifacts:
+    paths:
+      - student-api/dist/
+    expire_in: 1 week
+```
 
-A Wheel package is designed for installation, while the source distribution provides the source package.
+---
 
-16\. Python CI/CD Pipeline Flow
+## 17. Python CI/CD Pipeline Flow
 
-The final learning flow is:
-
+```text
 Developer
-
-&#x20;   │
-
-&#x20;   ▼
-
+    │
+    ▼
 GitLab Repository
-
-&#x20;   │
-
-&#x20;   ▼
-
+    │
+    ▼
 GitLab CI Pipeline
-
-&#x20;   │
-
-&#x20;   ▼
-
+    │
+    ▼
 Windows GitLab Runner
-
-&#x20;   │
-
-&#x20;   ├── Python version
-
-&#x20;   │
-
-&#x20;   ├── pip version
-
-&#x20;   │
-
-&#x20;   ├── Restore pip cache
-
-&#x20;   │
-
-&#x20;   ├── Install dependencies
-
-&#x20;   │
-
-&#x20;   ├── Run pytest
-
-&#x20;   │
-
-&#x20;   ├── Generate JUnit report
-
-&#x20;   │
-
-&#x20;   └── Build Python package
-
-&#x20;   │
-
-&#x20;   ▼
-
+    │
+    ├── Python version
+    ├── pip version
+    ├── Restore pip cache
+    ├── Install dependencies
+    ├── Run pytest
+    ├── Generate JUnit report
+    └── Build Python package
+    │
+    ▼
 Pipeline Result
+```
 
+---
 
+# 🔧 Troubleshooting & Practices
 
-17\. Troubleshooting Performed
+## 18. Troubleshooting Performed
 
-Problem 1 — Pytest collected zero tests
+| # | Error | Cause | Solution |
+|---|---|---|---|
+| 1 | `collected 0 items` | `tests/` folder was empty | Created `tests/test_app.py` |
+| 2 | `'pytest' is not recognized as an internal or external command` | pytest's `Scripts` folder not on PATH | Use `python -m pytest` |
+| 3 | `ModuleNotFoundError: No module named 'src'` | pytest ran from the repository root | `cd student-api` before running pytest |
+| 4 | `python : The term 'python' is not recognized` (in CI) | Python was on the **user** PATH, but the Runner service only sees the **System** PATH | Add Python to System PATH, restart Runner, verify |
 
-Error:
+> 🧠 **Lesson from problem 4:** *"Works on my machine"* is not the same as *"works on the Runner."* The Runner is a separate environment, often running as a different account. Always troubleshoot the **actual CI environment**.
 
-collected 0 items
+---
 
+## 19. Git Best Practices Practiced
 
+Before committing, the staging area was inspected:
 
-Investigation showed:
-
-tests/
-
-
-
-was empty.
-
-Solution:
-
-Created:
-
-tests/test\_app.py
-
-
-
-Problem 2 — pytest command not recognized
-
-Error:
-
-'pytest' is not recognized as an internal or external command
-
-
-
-Solution:
-
-Instead of:
-
-pytest
-
-
-
-use:
-
-python -m pytest
-
-
-
-Problem 3 — Python import error
-
-Error:
-
-ModuleNotFoundError: No module named 'src'
-
-
-
-Cause:
-
-pytest was executed from the repository root.
-
-Solution:
-
-cd student-api
-
-python -m pytest
-
-
-
-Problem 4 — GitLab Runner could not find Python
-
-Error:
-
-python : The term 'python' is not recognized
-
-
-
-Cause:
-
-Python was available to the interactive user environment but not to the Windows GitLab Runner service.
-
-Solution:
-
-1\. Add Python to System PATH.
-
-2\. Restart GitLab Runner.
-
-3\. Verify Python from the Runner environment.
-
-18\. Git Best Practices Practiced
-
-Before committing the Lesson 17 work, the staging area was inspected.
-
-Commands used:
-
+```bash
 git status
-
-
-
 git diff --cached --stat
-
-
-
 git diff --cached --name-only
+```
 
+Generated files were excluded with `.gitignore`:
 
-
-Generated files were excluded using .gitignore.
-
-Examples:
-
-\# Java
-
+```gitignore
+# Java
 student-management/target/
 
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+pytest-report.xml
+dist/
+build/
+*.egg-info/
 
+# CI caches
+.cache/
+.m2/
+```
 
-\# Python
+> 💡 A pattern like `__pycache__/` (without a folder prefix) matches **at any depth** — so it also covers `src/student_api/__pycache__/` and `tests/__pycache__/`, which `student-api/__pycache__/` alone would miss.
 
-student-api/.pytest\_cache/
+---
 
-student-api/\_\_pycache\_\_/
+## 20. Production-Oriented Practices
 
-student-api/\*\*/\*.pyc
+- ✅ Use `python -m pip` and `python -m pytest`
+- ✅ Keep application source separate from tests (src layout)
+- ✅ Use `requirements.txt` for dependencies — and pin versions
+- ✅ Use `.gitignore` for generated files
+- ✅ Use a self-managed GitLab Runner with tags
+- ✅ Configure dependency caching (with an absolute path and a cache key)
+- ✅ Publish JUnit test reports
+- ✅ Generate build artifacts/packages
+- ✅ Inspect Git staging before committing
+- ✅ Troubleshoot the actual CI environment rather than assuming it matches the local one
 
+> 🏭 **Shell executor note:** On a Shell Runner, `pip install` installs packages into the Runner machine's **global** Python, shared by every job and project. In production, jobs often create a fresh virtual environment first (`python -m venv .venv`) — or use a **Docker** executor, where each job gets a clean Python image.
 
+---
 
-This prevents build output and Python cache files from being committed.
+# 📋 Summary
 
-19\. Production-Oriented Practices Learned
+## 21. Key Commands
 
-The following practices were applied:
+| Command | Purpose |
+|---|---|
+| `python --version` | Check Python |
+| `python -m pip --version` | Check pip |
+| `python -m pip install -r requirements.txt` | Install dependencies |
+| `python -m pytest` | Run tests |
+| `python -m pytest --junitxml=pytest-report.xml` | Run tests and generate JUnit report |
+| `python -m pip install build` | Install the Python build tool |
+| `python -m build` | Build wheel and sdist into `dist/` |
+| `gitlab-runner-windows-amd64.exe restart` | Restart Runner (picks up new PATH) |
+| `git status` | Check Git status |
+| `git diff --cached --name-only` | List staged files |
+| `git diff --cached --stat` | Summarize staged changes |
 
-\- Use python -m pip.
+---
 
-\- Use python -m pytest.
+## 22. Final Outcome
 
-\- Keep application source separate from tests.
+Lesson 17 established a working **Python CI/CD workflow** with GitLab:
 
-\- Use requirements.txt for dependencies.
-
-\- Use .gitignore for generated files.
-
-\- Use a self-managed GitLab Runner with tags.
-
-\- Configure dependency caching.
-
-\- Publish JUnit test reports.
-
-\- Generate build artifacts/packages.
-
-\- Inspect Git staging before committing.
-
-\- Troubleshoot the actual CI environment rather than assuming the local environment matches it.
-
-20\. Key Commands
-
-Check Python
-
-python --version
-
-
-
-Check pip
-
-python -m pip --version
-
-
-
-Install dependencies
-
-python -m pip install -r requirements.txt
-
-
-
-Run tests
-
-python -m pytest
-
-
-
-Generate JUnit report
-
-python -m pytest --junitxml=pytest-report.xml
-
-
-
-Install Python build tool
-
-python -m pip install build
-
-
-
-Build package
-
-python -m build
-
-
-
-Check Git status
-
-git status
-
-
-
-Inspect staged files
-
-git diff --cached --name-only
-
-
-
-21\. Final Outcome
-
-Lesson 17 successfully established a working Python CI/CD workflow using GitLab.
-
-The final architecture is:
-
+```text
 Python Application
-
-&#x20;      │
-
-&#x20;      ▼
-
+       │
+       ▼
 GitLab Repository
-
-&#x20;      │
-
-&#x20;      ▼
-
+       │
+       ▼
 GitLab CI/CD
-
-&#x20;      │
-
-&#x20;      ▼
-
+       │
+       ▼
 Self-Managed Windows Runner
-
-&#x20;      │
-
-&#x20;      ├── Python
-
-&#x20;      ├── pip
-
-&#x20;      ├── Dependency Cache
-
-&#x20;      ├── pytest
-
-&#x20;      └── JUnit Reports
-
-&#x20;      │
-
-&#x20;      ▼
-
+       ├── Python
+       ├── pip
+       ├── Dependency Cache
+       ├── pytest
+       └── JUnit Reports
+       │
+       ▼
 Python Package
-
-
-
-The Python pipeline successfully executed automated tests using the self-managed Windows GitLab Runner.
+```
 
 Test result:
 
-2 passed
-
-
-
-22\. Lesson Status
-
-Lesson 17 — Python CI/CD
-
-Status:
-
-COMPLETED
-
-
-
-Hands-on:
-
-COMPLETED
-
-
-
-GitLab Pipeline:
-
-PASSED
-
-
-
-Python Tests:
-
-2 PASSED
-
-
-
-Dependency Cache:
-
-CONFIGURED
-
-
-
-JUnit Reporting:
-
-CONFIGURED
-
-
-
-Python Packaging:
-
-PRACTICED
-
-
-
-
-
-\### Commit the documentation
-
-
-
-After saving the file:
-
-
-
-```cmd
-
-cd C:\\Users\\ASPL-PUNE\\gitlab-zero-to-production
-
-
-
-Check:
-
-git status
-
-
-
-Then:
-
-git add 17-python-cicd\\README.md
-
-
-
-Commit:
-
-git commit -m "Document Python CI/CD lesson 17"
-
-
-
-Push:
-
-git push origin main
-
-
-
-Finally:
-
-git status
-
-
-
-You want:
-
-nothing to commit, working tree clean
-
-
-
-Lesson 17 is then fully documented and complete.
-
+```text
+2 passed ✅
+```
+
+---
+
+## 23. Lesson Status
+
+| Item | Status |
+|---|---|
+| Lesson 17 — Python CI/CD | ✅ Completed |
+| Hands-on | ✅ Completed |
+| GitLab Pipeline | ✅ Passed |
+| Python Tests | ✅ 2 passed |
+| Dependency Cache | ✅ Configured |
+| JUnit Reporting | ✅ Configured |
+| Python Packaging | ✅ Practiced |
+
+---
+
+### ✅ Status: Lesson 17 — Completed

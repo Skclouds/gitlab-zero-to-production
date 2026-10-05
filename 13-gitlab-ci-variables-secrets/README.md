@@ -1,1286 +1,694 @@
-Lesson 13 — GitLab CI/CD Variables \& Secrets
+# Lesson 13 — GitLab CI/CD Variables & Secrets
 
+## 🎯 Overview
 
+This lesson focuses on managing **configuration values** and **sensitive information** in GitLab CI/CD pipelines.
 
-\## Overview
+The objective is to understand how variables are defined, consumed, **protected**, **masked**, **scoped to environments**, and managed at different levels — and why sensitive credentials must **never** be hard-coded in `.gitlab-ci.yml`.
 
+---
 
+## 📚 Table of Contents
 
-This lesson focuses on managing configuration values and sensitive information in GitLab CI/CD pipelines.
+**Concepts**
 
+1. [Learning Objectives](#1-learning-objectives)
+2. [Why CI/CD Variables Are Required](#2-why-cicd-variables-are-required)
+3. [Basic CI/CD Variable](#3-basic-cicd-variable)
+4. [Project CI/CD Variables](#4-project-cicd-variables)
 
+**Hands-On: Project Variables**
 
-The primary objective is to understand how variables can be defined, consumed, protected, masked, scoped to environments, and managed at different levels.
+5. [Creating a Project Variable](#5-hands-on-creating-a-project-variable)
+6. [Using a Project Variable in a Job](#6-using-a-project-variable-in-a-job)
+7. [GitLab Runner and CI/CD Variables](#7-gitlab-runner-and-cicd-variables)
 
+**Visibility & Protection**
 
+8. [Masked Variables](#8-masked-variables)
+9. [Masked and Hidden Variables](#9-masked-and-hidden-variables)
+10. [Protected Variables](#10-protected-variables)
+11. [Masked vs Protected](#11-masked-vs-protected)
+12. [Why Protected Variables Are Important](#12-why-protected-variables-are-important)
 
-The lesson also demonstrates why sensitive credentials should not be hard-coded inside `.gitlab-ci.yml`.
+**Environments & Groups**
 
+13. [Environment-Scoped Variables](#13-environment-scoped-variables)
+14. [GitLab Environments](#14-gitlab-environments)
+15. [Environment-Specific Variable Hands-On](#15-environment-specific-variable-hands-on)
+16. [Group CI/CD Variables](#16-group-cicd-variables)
+17. [Project vs Group Variables](#17-project-vs-group-variables)
+18. [GitLab Learning Group](#18-gitlab-learning-group)
 
+**Precedence**
 
-\---
+19. [Variable Precedence](#19-variable-precedence)
+20. [Hands-On Variable Precedence](#20-hands-on-variable-precedence)
 
+**Security & Summary**
 
+21. [Important Security Rules](#21-important-security-rules)
+22. [Production CI/CD Secret Architecture](#22-production-cicd-secret-architecture)
+23. [Common Mistakes](#23-common-mistakes)
+24. [Hands-On Summary](#24-hands-on-summary)
+25. [Key Takeaways](#25-key-takeaways)
+26. [Lesson 13 Completion Checklist](#26-lesson-13-completion-checklist)
 
-\# 1. Learning Objectives
+---
 
-
+## 1. Learning Objectives
 
 By the end of this lesson, the following concepts were covered:
 
+- GitLab CI/CD variables
+- Project-level CI/CD variables
+- Group-level CI/CD variables
+- Masked variables
+- Protected variables
+- Environment-scoped variables
+- Predefined GitLab CI/CD variables
+- Consuming variables inside CI/CD jobs
+- Variable precedence
+- Configuration values vs secrets
+- Basic secret-management practices
+- Why secrets must not be committed to Git repositories
 
+---
 
-\- Understand GitLab CI/CD variables.
+## 2. Why CI/CD Variables Are Required
 
-\- Understand project-level CI/CD variables.
-
-\- Understand group-level CI/CD variables.
-
-\- Understand masked variables.
-
-\- Understand protected variables.
-
-\- Understand environment-scoped variables.
-
-\- Understand predefined GitLab CI/CD variables.
-
-\- Understand variable consumption inside CI/CD jobs.
-
-\- Understand variable precedence.
-
-\- Understand the difference between configuration values and secrets.
-
-\- Understand basic secret-management practices.
-
-\- Understand why secrets should not be committed to Git repositories.
-
-
-
-\---
-
-
-
-\# 2. Why CI/CD Variables Are Required
-
-
-
-Real CI/CD pipelines frequently require configuration values and credentials.
-
-
-
-Examples include:
-
-
+Real pipelines need configuration values **and** credentials:
 
 ```text
-
 Database host
-
 Database username
-
 Database password
-
 API tokens
-
 AWS credentials
-
 JFrog credentials
-
 Docker registry credentials
-
 SonarQube tokens
-
 Application configuration
-
 Environment information
+```
 
+❌ **Hard-coding** sensitive values in `.gitlab-ci.yml` is a bad practice:
 
-
-Hard-coding sensitive values directly into .gitlab-ci.yml is not a good practice.
-
-
-
-For example:
-
-
-
+```yaml
 variables:
+  DB_PASSWORD: "mypassword123"   # ❌
+```
 
-&#x20; DB\_PASSWORD: "mypassword123"
+The value becomes part of the repository and **remains in Git history** — even if you delete it in a later commit. Anyone who can read the repository (or its history) can read the secret.
 
+✅ Sensitive values belong in **GitLab CI/CD variable settings**, outside the code.
 
+---
 
-This value becomes part of the repository configuration and can potentially remain in Git history.
+## 3. Basic CI/CD Variable
 
+A **variable** is a named value reused inside CI/CD jobs (Lesson 12):
 
-
-Instead, sensitive values should be managed using appropriate GitLab CI/CD variable mechanisms.
-
-
-
-3\. Basic CI/CD Variable
-
-
-
-A variable is a named value that can be reused inside CI/CD jobs.
-
-
-
-Example:
-
-
-
+```yaml
 variables:
+  APP_NAME: "student-api"
+  ENVIRONMENT: "development"
+```
 
-&#x20; APP\_NAME: "student-api"
-
-&#x20; ENVIRONMENT: "development"
-
-
-
-The variables can be referenced using:
-
-
-
+```yaml
 script:
+  - echo "$APP_NAME"
+  - echo "$ENVIRONMENT"
+```
 
-&#x20; - echo "$APP\_NAME"
+Output:
 
-&#x20; - echo "$ENVIRONMENT"
-
-
-
-Example output:
-
-
-
+```text
 student-api
-
 development
+```
 
-4\. Project CI/CD Variables
+> 💡 This is fine for **non-sensitive** configuration. Secrets go in the GitLab UI instead (next section).
 
+---
 
+## 4. Project CI/CD Variables
 
-A project CI/CD variable belongs to a specific GitLab project.
+A **project CI/CD variable** belongs to one GitLab project and is stored **in GitLab, not in the repository**.
 
-
-
-Variables can be configured through:
-
-
-
+```text
 Project
-
-&#x20;  ↓
-
+   ↓
 Settings
-
-&#x20;  ↓
-
+   ↓
 CI/CD
-
-&#x20;  ↓
-
+   ↓
 Variables
+```
 
+| Field | Example |
+|---|---|
+| Key | `DEMO_SECRET` |
+| Value | `<secret value>` |
 
+Jobs reference it as `$DEMO_SECRET`. The actual value **never appears** in `.gitlab-ci.yml`.
 
-Example:
+> 🔐 **Analogy:** `.gitlab-ci.yml` is a **recipe** that says "add the secret sauce." GitLab keeps the secret sauce **locked in a safe** and adds it only when the dish is being cooked.
 
+---
 
+# 🛠️ Hands-On: Project Variables
 
-Key:
+## 5. Hands-On: Creating a Project Variable
 
-DEMO\_SECRET
+| Setting | Value |
+|---|---|
+| Key | `DEMO_SECRET` |
+| Visibility | Masked |
+| Value | A **dummy** practice value (not a real credential) |
 
+Purpose: show that a variable stored in GitLab can be consumed by a job **without** storing its value in the repository.
 
+> ⚠️ GitLab only accepts a value for masking if it meets certain rules — for example, it must be a **single line** and at least **8 characters** long, using only allowed characters. If the **Masked** option is rejected, check the value against these rules.
 
-Value:
+---
 
-<secret value>
+## 6. Using a Project Variable in a Job
 
-
-
-The value is then available to CI/CD jobs as:
-
-
-
-$DEMO\_SECRET
-
-
-
-The actual secret does not need to be stored in .gitlab-ci.yml.
-
-
-
-5\. Hands-On: Project CI/CD Variable
-
-
-
-A project variable named:
-
-
-
-DEMO\_SECRET
-
-
-
-was created in the GitLab project.
-
-
-
-The variable was configured as:
-
-
-
-Visibility:
-
-Masked
-
-
-
-The value was a dummy practice value and not a real credential.
-
-
-
-The purpose was to demonstrate how a variable stored in GitLab can be consumed by a CI/CD job without storing the value in the repository.
-
-
-
-6\. Using a Project Variable in a Job
-
-
-
-The following job was used for the hands-on exercise:
-
-
-
+```yaml
 secret-test:
+  stage: test
+  script:
+    - echo "Testing GitLab CI/CD variable"
+    - echo "Secret variable is configured"
+    - 'echo "Secret value: $DEMO_SECRET"'
+```
 
-&#x20; stage: test
+The pipeline configuration contains only the **reference** `$DEMO_SECRET` — **not** the value. GitLab supplies the value when the job runs.
 
-&#x20; script:
+Expected log output:
 
-&#x20;   - echo "Testing GitLab CI/CD variable"
+```text
+Secret value: [MASKED]
+```
 
-&#x20;   - echo "Secret variable is configured"
+> ⚠️ Printing a secret is done here **only to demonstrate masking**. Never do this in a real pipeline (see [section 21](#21-important-security-rules)).
 
-&#x20;   - 'echo "Secret value: $DEMO\_SECRET"'
+---
 
+## 7. GitLab Runner and CI/CD Variables
 
-
-The important point is that the pipeline configuration contains:
-
-
-
-$DEMO\_SECRET
-
-
-
-but does not contain the actual secret value.
-
-
-
-The value is supplied by GitLab when the job executes.
-
-
-
-7\. GitLab Runner and CI/CD Variables
-
-
-
-The execution flow is:
-
-
-
+```text
 GitLab Project
-
-&#x20;     │
-
-&#x20;     ▼
-
+      │
+      ▼
 CI/CD Variable
-
-&#x20;     │
-
-&#x20;     ▼
-
+      │
+      ▼
 Pipeline
-
-&#x20;     │
-
-&#x20;     ▼
-
+      │
+      ▼
 GitLab Runner
-
-&#x20;     │
-
-&#x20;     ▼
-
+      │
+      ▼
 CI Job
+      │
+      ▼
+$DEMO_SECRET
+```
 
-&#x20;     │
+The Runner receives the variable as part of the **job's environment**, only for the duration of that job.
 
-&#x20;     ▼
+> 💡 On a **Shell** Runner (Lesson 14), the job runs directly on your machine — so anyone controlling the job's script can read the variable. That's one reason Runner isolation matters.
 
-$DEMO\_SECRET
+---
 
+# 🔒 Visibility & Protection
 
+## 8. Masked Variables
 
-The GitLab Runner executes the job and receives the variable as part of the CI/CD job environment.
+A **masked** variable is hidden in job logs:
 
+```text
+Secret value: [MASKED]
+```
 
+Purpose: reduce **accidental** exposure of sensitive values through CI/CD logs.
 
-8\. Masked Variables
+> ⚠️ **Masking is not a guarantee.** The job still has full access to the real value. A script could transform it (e.g. base64-encode it, or print it one character at a time), and the transformed text would **not** be masked. Production pipelines should **never print secrets**, even masked ones.
 
+---
 
+## 9. Masked and Hidden Variables
 
-A masked variable is configured so that GitLab attempts to prevent its value from appearing directly in job logs.
+Newer GitLab versions offer a stronger option:
 
+| Visibility | Hidden in job logs | Value viewable in the GitLab UI after saving |
+|---|---|---|
+| **Visible** | ❌ | ✅ |
+| **Masked** | ✅ | ✅ (to users with access to settings) |
+| **Masked and hidden** | ✅ | ❌ — cannot be revealed after creation |
 
+> 💡 With **Masked and hidden**, the value can't be viewed again in the UI — only replaced. Use it for credentials nobody needs to read back.
 
-Example:
+---
 
+## 10. Protected Variables
 
+A **protected** variable is only passed to pipelines running on **protected branches or protected tags** (Lesson 9).
 
-Secret value: \[MASKED]
+| Setting | Value |
+|---|---|
+| Protect variable | ✅ Enabled |
 
+Purpose: keep sensitive variables (like production credentials) away from pipelines on **unprotected** branches.
 
+```text
+feature/*            → No production secret ❌
+develop (unprotected)→ No production secret ❌
+main (protected 🔒)  → Production secret available ✅
+```
 
-The purpose of masking is to reduce accidental exposure of sensitive values through CI/CD logs.
+> 💡 On an unprotected branch, a protected variable is simply **not set** — `$PRODUCTION_API_TOKEN` is empty. Jobs don't error by themselves; they just receive nothing.
 
+---
 
+## 11. Masked vs Protected
 
-However:
+These solve **different** problems:
 
+| Setting | Controls | Question it answers |
+|---|---|---|
+| **Visible** | — | The value can appear in logs |
+| **Masked** | **Exposure** in logs | *Can people see the value in job output?* |
+| **Masked and hidden** | Exposure in logs **and** UI | *Can anyone read the value back later?* |
+| **Protected** | **Availability** | *Which pipelines receive the value at all?* |
 
+A variable can be **both**:
 
-Masking should not be treated as a guarantee that a secret can never be exposed.
+```text
+Masked + Protected
+```
 
+This is a common pattern for **production credentials**.
 
+---
 
-A CI/CD job can still access the variable.
+## 12. Why Protected Variables Are Important
 
+Consider `PRODUCTION_API_TOKEN`. A feature branch should **not** have access to it — otherwise anyone who can push a branch could write a job that uses the production token.
 
-
-Therefore, production pipelines should avoid printing secrets to logs even when masking is enabled.
-
-
-
-9\. Masked and Hidden Variables
-
-
-
-GitLab also provides stronger visibility controls depending on the GitLab version and variable configuration options.
-
-
-
-Conceptually:
-
-
-
-Masked
-
-&#x20;   ↓
-
-Attempts to hide the value in job logs
-
-
-
-Masked and hidden
-
-&#x20;   ↓
-
-Attempts to hide the value in job logs
-
-\+
-
-Limits normal UI exposure of the value
-
-
-
-For sensitive credentials, an appropriate hidden/masked configuration should be considered according to the organization's security requirements.
-
-
-
-10\. Protected Variables
-
-
-
-A protected variable is associated with protected branches or tags.
-
-
-
-Example:
-
-
-
-Protect variable:
-
-Enabled
-
-
-
-The purpose is to prevent sensitive variables, such as production credentials, from being made available to pipelines running on unprotected branches.
-
-
-
-Example:
-
-
-
-feature/\*
-
-&#x20;   ↓
-
-No production secret
-
-
-
-develop
-
-&#x20;   ↓
-
-No production secret
-
-
-
-main (protected)
-
-&#x20;   ↓
-
-Production secret available
-
-11\. Masked vs Protected
-
-
-
-These concepts solve different problems.
-
-
-
-Feature	Purpose
-
-Visible	Variable value can potentially appear in logs
-
-Masked	Attempts to hide value in job logs
-
-Masked and hidden	Provides stronger protection of the value's visibility
-
-Protected	Controls availability based on protected branches/tags
-
-
-
-A variable can be configured as both:
-
-
-
-Masked
-
-\+
-
-Protected
-
-
-
-This is a common pattern for sensitive production credentials.
-
-
-
-12\. Why Protected Variables Are Important
-
-
-
-Consider a production API token:
-
-
-
-PRODUCTION\_API\_TOKEN
-
-
-
-A feature branch should normally not have access to this credential.
-
-
-
-A safer model is:
-
-
-
+```text
 Feature Branch
+      ├── Build
+      ├── Test
+      ├── Quality Checks
+      └── ❌ No production credentials
 
-&#x20;     │
+Protected Main 🔒
+      ├── Build
+      ├── Test
+      └── Production Deployment
+              └── ✅ Production credentials
+```
 
-&#x20;     ├── Build
+> 🔗 **Connection to Lessons 8 & 9:** Only Maintainers can merge into protected `main`. So protected variables mean only **reviewed, merged** code can use production secrets.
 
-&#x20;     ├── Test
+---
 
-&#x20;     └── Quality Checks
+# 🌍 Environments & Groups
 
-&#x20;     │
+## 13. Environment-Scoped Variables
 
-&#x20;     └── No production credentials
+Different environments need different values:
 
-
-
-Protected Main
-
-&#x20;     │
-
-&#x20;     ├── Build
-
-&#x20;     ├── Test
-
-&#x20;     └── Production Deployment
-
-&#x20;             │
-
-&#x20;             └── Production credentials
-
-
-
-This follows the principle of limiting sensitive credentials to the pipelines that require them.
-
-
-
-13\. Environment-Scoped Variables
-
-
-
-Different environments often require different configuration values.
-
-
-
-Typical environments include:
-
-
-
-development
-
-staging
-
-production
-
-
-
-For example:
-
-
-
+```text
 development → dev database
-
 staging     → staging database
-
 production  → production database
+```
 
+An **environment-scoped** variable lets the **same variable name** have different values per environment:
 
+| Key | Environment scope | Value |
+|---|---|---|
+| `DATABASE_HOST` | `development` | `dev-database.example.com` |
+| `DATABASE_HOST` | `staging` | `staging-database.example.com` |
+| `DATABASE_HOST` | `production` | `prod-database.example.com` |
 
-An environment-scoped variable allows the same variable name to have different values for different environments.
+The default scope `*` (All) makes a variable available to **every** job.
 
+---
 
+## 14. GitLab Environments
 
-Example:
+A job is linked to an environment with the `environment` keyword:
 
-
-
-DATABASE\_HOST
-
-
-
-could conceptually have:
-
-
-
-development → dev-database.example.com
-
-staging     → staging-database.example.com
-
-production  → prod-database.example.com
-
-14\. GitLab Environment
-
-
-
-A CI/CD job can be associated with an environment using:
-
-
-
+```yaml
 deploy-development:
+  stage: deploy
+  environment:
+    name: development
+  script:
+    - echo "Deploying to development"
+```
 
-&#x20; stage: deploy
-
-&#x20; environment:
-
-&#x20;   name: development
-
-&#x20; script:
-
-&#x20;   - echo "Deploying to development"
-
-
-
-The important configuration is:
-
-
-
+```yaml
 environment:
+  name: development
+```
 
-&#x20; name: development
+tells GitLab this job deploys to the **development** environment. GitLab also lists it under **Operate → Environments**.
 
+> 💡 An environment-scoped variable is passed **only** to jobs whose `environment: name` matches its scope. A job with no `environment` keyword receives only variables scoped to `*`.
 
+---
 
-This tells GitLab that the job is associated with the development environment.
-
-
-
-15\. Environment-Specific Variable Hands-On
-
-
+## 15. Environment-Specific Variable Hands-On
 
 A practice variable was created:
 
+| Field | Value |
+|---|---|
+| Key | `DATABASE_HOST` |
+| Environment scope | `development` |
+| Value | `dev-database.example.com` *(dummy value)* |
 
+Deployment job:
 
-Key:
-
-DATABASE\_HOST
-
-
-
-with a development environment scope.
-
-
-
-Example practice value:
-
-
-
-dev-database.example.com
-
-
-
-The value was intentionally a dummy value and not a real production database address.
-
-
-
-A deployment job was then configured:
-
-
-
+```yaml
 deploy-development:
+  stage: deploy
+  environment:
+    name: development
+  script:
+    - echo "Starting development deployment"
+    - 'echo "Database host: $DATABASE_HOST"'
+    - echo "Development deployment completed"
+```
 
-&#x20; stage: deploy
-
-&#x20; environment:
-
-&#x20;   name: development
-
-&#x20; script:
-
-&#x20;   - echo "Starting development deployment"
-
-&#x20;   - 'echo "Database host: $DATABASE\_HOST"'
-
-&#x20;   - echo "Development deployment completed"
-
-
-
-The pipeline can therefore associate:
-
-
-
+```text
 deploy-development
-
-&#x20;       ↓
-
+        ↓
 development environment
-
-&#x20;       ↓
-
-DATABASE\_HOST
-
-&#x20;       ↓
-
+        ↓
+DATABASE_HOST
+        ↓
 dev-database.example.com
+```
 
-16\. Group CI/CD Variables
+> 💡 A host name isn't a secret, so printing it is fine here.
 
+---
 
+## 16. Group CI/CD Variables
 
-Project variables belong to individual projects.
+**Group variables** are defined at the group level and **inherited** by all projects in that group hierarchy (including subgroups).
 
-
-
-Group variables can be managed at the GitLab group level and can be inherited by projects within the appropriate group hierarchy.
-
-
-
-Example:
-
-
-
+```text
 GitLab Learning
-
-&#x20;      │
-
-&#x20;      ▼
-
+       │
+       ▼
 Group CI/CD Variables
-
-&#x20;      │
-
-&#x20;      ├── SONAR\_HOST\_URL
-
-&#x20;      ├── JFROG\_URL
-
-&#x20;      └── DOCKER\_REGISTRY
-
-&#x20;      │
-
-&#x20;      ▼
-
+       ├── SONAR_HOST_URL
+       ├── JFROG_URL
+       └── DOCKER_REGISTRY
+       │
+       ▼
 Projects within the group
+```
 
+Useful when **many projects share** the same configuration — update it once, every project gets it.
 
+> 🔗 This mirrors **permission inheritance** from Lesson 8.
 
-This is useful when multiple projects share common configuration.
+---
 
+## 17. Project vs Group Variables
 
+| Variable Type | Scope | Examples |
+|---|---|---|
+| **Project variable** | One project | `APP_NAME` |
+| **Group variable** | Group and all child projects | `SONAR_HOST_URL`, `JFROG_URL`, `DOCKER_REGISTRY` |
 
-17\. Project vs Group Variables
+Project-specific configuration stays at the project level; organization-wide configuration is managed at the group level.
 
-Variable Type	Scope
+---
 
-Project variable	Individual project
+## 18. GitLab Learning Group
 
-Group variable	Group and applicable child projects
+The **GitLab Learning** group (created in Lesson 8) can demonstrate group-level variables:
 
+| Field | Value |
+|---|---|
+| Key | `COMMON_TOOL_NAME` |
+| Value | `GitLab-DevOps-Tools` |
 
-
-Example:
-
-
-
-Project:
-
-APP\_NAME
-
-
-
-Group:
-
-SONAR\_HOST\_URL
-
-JFROG\_URL
-
-DOCKER\_REGISTRY
-
-
-
-Project-specific configuration can remain at the project level while common organization-wide configuration can be managed at the group level.
-
-
-
-18\. GitLab Learning Group
-
-
-
-A GitLab group named:
-
-
-
+```text
 GitLab Learning
-
-
-
-was created during the GitLab learning exercises.
-
-
-
-The group can be used to demonstrate group-level CI/CD variables.
-
-
-
-Example:
-
-
-
-Key:
-
-COMMON\_TOOL\_NAME
-
-
-
-Value:
-
-GitLab-DevOps-Tools
-
-
-
-The intended architecture is:
-
-
-
-GitLab Learning
-
-&#x20;      │
-
-&#x20;      ▼
-
+       │
+       ▼
 Group CI/CD Variable
-
-&#x20;      │
-
-&#x20;      ▼
-
+       │
+       ▼
 Projects within the group
-
-&#x20;      │
-
-&#x20;      ▼
-
+       │
+       ▼
 CI/CD Pipeline
+       │
+       ▼
+$COMMON_TOOL_NAME
+```
 
-&#x20;      │
+> ⚠️ A project must be **inside** the group's hierarchy for inheritance to apply. In Lesson 8, `gitlab-zero-to-production` was intentionally kept **outside** the GitLab Learning group — so it does **not** receive `$COMMON_TOOL_NAME`. To test group variables, create a small practice project **inside** GitLab Learning (or its DevOps subgroup).
 
-&#x20;      ▼
+---
 
-$COMMON\_TOOL\_NAME
+# ⚖️ Precedence
 
+## 19. Variable Precedence
 
+**Variable precedence** decides which value wins when the same variable is defined in several places.
 
-A project must be within the group's hierarchy for group-variable inheritance to apply.
+GitLab's order, from **highest** to **lowest** priority (simplified):
 
+| Priority | Where the variable is defined |
+|---|---|
+| 1 (highest) | Pipeline variables — set when running a pipeline manually, by a trigger, or a schedule |
+| 2 | **Project** CI/CD variables (Settings → CI/CD → Variables) |
+| 3 | **Group** CI/CD variables (closest subgroup wins) |
+| 4 | Instance CI/CD variables |
+| 5 | **Job-level** `variables:` in `.gitlab-ci.yml` |
+| 6 | **Global/default** `variables:` in `.gitlab-ci.yml` |
+| 7 (lowest) | Predefined variables |
 
+> ⚠️ **Counter-intuitive:** Variables set in the **GitLab UI** (project/group settings) **override** variables written in `.gitlab-ci.yml` — even job-level ones. The UI settings win because they're treated as deliberate overrides by someone with project access.
 
-19\. Variable Precedence
+Example:
 
+```text
+Group:   APP_NAME = group-app
+Project: APP_NAME = project-app
+Job:     APP_NAME = job-app      (.gitlab-ci.yml)
 
+Result in the job → project-app
+```
 
-Variable precedence determines which value is used when the same variable is defined in multiple locations.
+Understanding precedence is essential when troubleshooting **unexpected values** in pipelines.
 
+---
 
+## 20. Hands-On Variable Precedence
 
-For example:
+Create a project-level variable:
 
+| Field | Value |
+|---|---|
+| Key | `PRECEDENCE_TEST` |
+| Value | `project-value` |
 
+Define the same variable in a job:
 
-Group:
-
-APP\_NAME = group-app
-
-
-
-Project:
-
-APP\_NAME = project-app
-
-
-
-Job:
-
-APP\_NAME = job-app
-
-
-
-A more specific definition can override a broader definition, subject to GitLab's complete variable precedence rules.
-
-
-
-This is important when troubleshooting unexpected values in CI/CD pipelines.
-
-
-
-20\. Hands-On Variable Precedence
-
-
-
-A practice variable can be created at the project level:
-
-
-
-Key:
-
-PRECEDENCE\_TEST
-
-
-
-Value:
-
-project-value
-
-
-
-A job can then define the same variable:
-
-
-
+```yaml
 precedence-test:
-
-&#x20; stage: test
-
-
-
-&#x20; variables:
-
-&#x20;   PRECEDENCE\_TEST: "job-value"
-
-
-
-&#x20; script:
-
-&#x20;   - 'echo "PRECEDENCE\_TEST = $PRECEDENCE\_TEST"'
-
-
-
-The job-level value demonstrates that a more specific definition can override the project-level value.
-
-
+  stage: test
+  variables:
+    PRECEDENCE_TEST: "job-value"
+  script:
+    - 'echo "PRECEDENCE_TEST = $PRECEDENCE_TEST"'
+```
 
 Expected output:
 
+```text
+PRECEDENCE_TEST = project-value
+```
 
+The **project variable wins**, because UI-defined project variables have higher precedence than `variables:` in `.gitlab-ci.yml` (see the table in section 19).
 
-PRECEDENCE\_TEST = job-value
+Within `.gitlab-ci.yml` itself, the more specific definition does win:
 
-21\. Important Security Rules
+| Defined in `.gitlab-ci.yml` | Result |
+|---|---|
+| Global `variables: PRECEDENCE_TEST: "global-value"` and job `variables: PRECEDENCE_TEST: "job-value"` | `job-value` ✅ |
 
+> 🧪 **Try it:** Delete the project variable and re-run the pipeline. The output changes to `job-value` — proving the project variable was overriding it.
 
+---
 
-The following practices should be followed when working with CI/CD secrets.
+# 🔐 Security & Summary
 
+## 21. Important Security Rules
 
+### ❌ Do not hard-code credentials
 
-Do not hard-code credentials
-
-
-
-Avoid:
-
-
-
+```yaml
 variables:
+  DB_PASSWORD: "real-password"   # ❌
+```
 
-&#x20; DB\_PASSWORD: "real-password"
+### ❌ Do not commit API tokens
 
-Do not commit API tokens
+Never store these in source code:
 
+```text
+API_TOKEN
+AWS_SECRET_KEY
+JFROG_TOKEN
+DATABASE_PASSWORD
+```
 
+### ✅ Use GitLab CI/CD variables
 
-Avoid storing:
+Manage sensitive values through **Settings → CI/CD → Variables**.
 
+### ✅ Mask sensitive values
 
+Reduce accidental exposure in logs.
 
-API\_TOKEN
+### ✅ Protect production credentials
 
-AWS\_SECRET\_KEY
+Restrict them to protected branches/tags — the pipelines that actually need them.
 
-JFROG\_TOKEN
+### ❌ Do not print secrets
 
-DATABASE\_PASSWORD
-
-
-
-directly in source code.
-
-
-
-Use GitLab CI/CD Variables
-
-
-
-Sensitive values should be managed through appropriate GitLab variable mechanisms.
-
-
-
-Use masking where appropriate
-
-
-
-Sensitive values should generally be configured so that accidental exposure in logs is reduced.
-
-
-
-Use protection for production credentials
-
-
-
-Production credentials should generally be restricted to the pipelines that actually require them.
-
-
-
-Do not print secrets
-
-
-
-Avoid:
-
-
-
+```yaml
 script:
-
-&#x20; - echo "$DB\_PASSWORD"
-
-
-
-even if the variable is masked.
-
-
-
-Instead, use the variable directly in the command that needs it.
-
-
-
-22\. Production CI/CD Secret Architecture
-
-
-
-A production-style setup can look like:
-
-
-
-&#x20;                        GitLab
-
-&#x20;                          │
-
-&#x20;             ┌────────────┴────────────┐
-
-&#x20;             │                         │
-
-&#x20;        Group Variables          Project Variables
-
-&#x20;             │                         │
-
-&#x20;             ▼                         ▼
-
-&#x20;      Common configuration       Project configuration
-
-&#x20;             │                         │
-
-&#x20;             └────────────┬────────────┘
-
-&#x20;                          │
-
-&#x20;                          ▼
-
-&#x20;                   CI/CD Pipeline
-
-&#x20;                          │
-
-&#x20;                          ▼
-
-&#x20;                    GitLab Runner
-
-&#x20;                          │
-
-&#x20;                          ▼
-
-&#x20;                       Job
-
-&#x20;                          │
-
-&#x20;               ┌──────────┴──────────┐
-
-&#x20;               ▼                     ▼
-
-&#x20;         Configuration            Secrets
-
-
-
-Production secrets should be managed with appropriate scope and access restrictions.
-
-
-
-23\. Common Mistakes
-
-Mistake 1 — Hard-coding secrets
-
-DB\_PASSWORD: "password123"
-
-
-
-Avoid this.
-
-
-
-Mistake 2 — Printing secrets
-
-echo "$DB\_PASSWORD"
-
-
-
-Avoid exposing credentials through logs.
-
-
-
-Mistake 3 — Giving production credentials to feature branches
-
-
-
-Production secrets should not normally be available to arbitrary unprotected branches.
-
-
-
-Mistake 4 — Confusing masked and protected
-
-
-
-Masked:
-
-
-
-Controls exposure of the value
-
-
-
-Protected:
-
-
-
-Controls availability based on protected refs
-
-
-
-They are different security controls.
-
-
-
-Mistake 5 — Unexpected variable overrides
-
-
-
-If the same variable exists at multiple scopes, its effective value may not be the one expected.
-
-
-
-Always consider variable precedence when troubleshooting.
-
-
-
-24\. Hands-On Summary
-
-
-
-The following concepts were practiced:
-
-
-
-✓ Project CI/CD Variables
-
-✓ Masked Variables
-
-✓ Protected Variables
-
-✓ Environment-Scoped Variables
-
-✓ Group CI/CD Variables
-
-✓ Variable Consumption in Jobs
-
-✓ Variable Precedence
-
-✓ Secret Management Concepts
-
-✓ GitLab Runner Variable Usage
-
-25\. Key Takeaways
-
-Project Variable
-
-
-
-Used for project-specific configuration or secrets.
-
-
-
-Project
-
-&#x20;  ↓
-
-CI/CD Variable
-
-Group Variable
-
-
-
-Used for common configuration across projects in a group hierarchy.
-
-
-
-Group
-
-&#x20;  ↓
-
-Projects
-
-Masked
-
-
-
-Helps prevent sensitive values from appearing plainly in logs.
-
-
-
-Protected
-
-
-
-Restricts variable availability to protected branches/tags according to GitLab's configuration.
-
-
-
-Environment Scope
-
-
-
-Allows different values for environments such as:
-
-
-
-development
-
-staging
-
-production
-
-Variable Precedence
-
-
-
-Determines which value is used when the same variable is defined at multiple scopes.
-
-
-
-26\. Lesson 13 Completion Checklist
-
-&#x20;Understand CI/CD variables
-
-&#x20;Create a project CI/CD variable
-
-&#x20;Use a project variable in a pipeline
-
-&#x20;Understand masked variables
-
-&#x20;Understand masked and hidden variables
-
-&#x20;Understand protected variables
-
-&#x20;Understand masked vs protected
-
-&#x20;Understand environment-scoped variables
-
-&#x20;Associate jobs with environments
-
-&#x20;Understand group CI/CD variables
-
-&#x20;Understand project vs group variables
-
-&#x20;Understand variable precedence
-
-&#x20;Understand secret-management fundamentals
-
-&#x20;Understand why secrets should not be hard-coded
-
-&#x20;Understand why secrets should not be printed in logs
-
+  - echo "$DB_PASSWORD"   # ❌ even if masked
+```
+
+✅ Instead, pass the variable **directly** to the command that needs it:
+
+```yaml
+script:
+  - docker login -u "$REGISTRY_USER" -p "$REGISTRY_PASSWORD" "$REGISTRY_URL"
+```
+
+### 🚨 If a secret is ever leaked
+
+**Rotate it immediately** — revoke the old credential and create a new one. Deleting it from the code or logs is not enough (Lesson 10).
+
+---
+
+## 22. Production CI/CD Secret Architecture
+
+```text
+                         GitLab
+                           │
+              ┌────────────┴────────────┐
+              │                         │
+        Group Variables          Project Variables
+              │                         │
+              ▼                         ▼
+     Common configuration      Project configuration
+              │                         │
+              └────────────┬────────────┘
+                           │
+                           ▼
+                    CI/CD Pipeline
+                           │
+                           ▼
+                     GitLab Runner
+                           │
+                           ▼
+                          Job
+                           │
+                ┌──────────┴──────────┐
+                ▼                     ▼
+          Configuration            Secrets
+                              (masked + protected)
+```
+
+> 💡 Larger organizations often go one step further and keep secrets in a dedicated **secrets manager** (e.g. HashiCorp Vault, AWS Secrets Manager), which GitLab jobs fetch at runtime.
+
+---
+
+## 23. Common Mistakes
+
+| # | Mistake | Example | Fix |
+|---|---|---|---|
+| 1 | Hard-coding secrets | `DB_PASSWORD: "password123"` | Use a masked CI/CD variable |
+| 2 | Printing secrets | `echo "$DB_PASSWORD"` | Pass the variable directly to the command |
+| 3 | Giving production credentials to feature branches | Unprotected production token | Mark it **Protected** |
+| 4 | Confusing masked and protected | "It's masked, so it's safe on any branch" | Masked = **exposure**; Protected = **availability** |
+| 5 | Unexpected variable overrides | Job-level value "ignored" | Check precedence — a project/group UI variable may be overriding it |
+| 6 | Expecting group variables in an outside project | `$COMMON_TOOL_NAME` is empty | The project must be inside the group hierarchy |
+
+---
+
+## 24. Hands-On Summary
+
+| Concept practiced | Status |
+|---|---|
+| Project CI/CD variables | ✅ |
+| Masked variables | ✅ |
+| Protected variables | ✅ |
+| Environment-scoped variables | ✅ |
+| Group CI/CD variables | ✅ |
+| Variable consumption in jobs | ✅ |
+| Variable precedence | ✅ |
+| Secret-management concepts | ✅ |
+| GitLab Runner variable usage | ✅ |
+
+---
+
+## 25. Key Takeaways
+
+| Concept | Meaning |
+|---|---|
+| **Project variable** | Project-specific configuration or secrets, stored in GitLab |
+| **Group variable** | Shared configuration inherited by all projects in a group hierarchy |
+| **Masked** | Hides the value in job logs (reduces accidental exposure) |
+| **Masked and hidden** | Also prevents viewing the value in the UI after saving |
+| **Protected** | Passes the value only to pipelines on protected branches/tags |
+| **Environment scope** | Different values per environment (`development`, `staging`, `production`) |
+| **Variable precedence** | Decides which value wins — UI variables override `.gitlab-ci.yml` variables |
+
+```text
+Project  → CI/CD Variable
+Group    → Projects (inherited)
+```
+
+---
+
+## 26. Lesson 13 Completion Checklist
+
+- [x] Understand CI/CD variables
+- [x] Create a project CI/CD variable
+- [x] Use a project variable in a pipeline
+- [x] Understand masked variables
+- [x] Understand masked and hidden variables
+- [x] Understand protected variables
+- [x] Understand masked vs protected
+- [x] Understand environment-scoped variables
+- [x] Associate jobs with environments
+- [x] Understand group CI/CD variables
+- [x] Understand project vs group variables
+- [x] Understand variable precedence
+- [x] Understand secret-management fundamentals
+- [x] Understand why secrets should not be hard-coded
+- [x] Understand why secrets should not be printed in logs
+
+---
+
+### ✅ Status: Lesson 13 — Completed
